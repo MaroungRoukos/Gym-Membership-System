@@ -2,8 +2,9 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import Member, Payment
+from .models import Member, Payment, RecordedMemberPaymentStatus
 from .utils import end_date_for_plan
+from .validators import normalize_lebanon_phone
 
 
 class AdminTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -17,6 +18,7 @@ class AdminTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class MemberSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField(read_only=True)
     membership_status = serializers.SerializerMethodField(read_only=True)
     latest_payment_status = serializers.SerializerMethodField(read_only=True)
 
@@ -25,10 +27,14 @@ class MemberSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "id_number",
+            "first_name",
+            "last_name",
             "full_name",
             "email",
             "phone",
             "plan",
+            "member_payment_status",
+            "payment_received_on",
             "start_date",
             "end_date",
             "membership_status",
@@ -39,9 +45,13 @@ class MemberSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "id_number",
+            "full_name",
             "created_at",
             "updated_at",
         )
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
 
     def get_membership_status(self, obj):
         today = timezone.localdate()
@@ -58,20 +68,60 @@ class MemberWriteSerializer(serializers.ModelSerializer):
     """If end_date is omitted or null, it is set from start_date and plan."""
 
     end_date = serializers.DateField(required=False, allow_null=True)
+    payment_received_on = serializers.DateField(required=False, allow_null=True)
+    first_name = serializers.CharField(max_length=100)
+    last_name = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, default=""
+    )
 
     class Meta:
         model = Member
         fields = (
-            "full_name",
+            "first_name",
+            "last_name",
             "email",
             "phone",
             "plan",
+            "member_payment_status",
+            "payment_received_on",
             "start_date",
             "end_date",
         )
 
+    def validate_first_name(self, value):
+        if not (value and str(value).strip()):
+            raise serializers.ValidationError("First name is required.")
+        return str(value).strip()[:100]
+
+    def validate_last_name(self, value):
+        if value is None:
+            return ""
+        return str(value).strip()[:100]
+
+    def validate_phone(self, value):
+        if not self.instance:
+            if not value or not str(value).strip():
+                raise serializers.ValidationError(
+                    "Phone is required. Lebanon E.164: +961 and 8 digits, e.g. +96131234567."
+                )
+            try:
+                return normalize_lebanon_phone(value)
+            except ValueError as e:
+                raise serializers.ValidationError(str(e)) from e
+        if value is None or (isinstance(value, str) and not str(value).strip()):
+            return ""
+        try:
+            return normalize_lebanon_phone(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e)) from e
+
     def validate(self, attrs):
         instance = self.instance
+        if not instance and "member_payment_status" not in attrs:
+            attrs["member_payment_status"] = RecordedMemberPaymentStatus.PENDING
+        if attrs.get("member_payment_status") == RecordedMemberPaymentStatus.PENDING:
+            attrs["payment_received_on"] = None
+
         start = attrs.get("start_date", getattr(instance, "start_date", None))
         plan = attrs.get("plan", getattr(instance, "plan", None))
 
@@ -81,7 +131,9 @@ class MemberWriteSerializer(serializers.ModelSerializer):
         else:
             if "end_date" in attrs and attrs.get("end_date") is None:
                 recompute = True
-            elif ("start_date" in attrs or "plan" in attrs) and "end_date" not in attrs:
+            elif (
+                "start_date" in attrs or "plan" in attrs
+            ) and "end_date" not in attrs:
                 recompute = True
 
         if recompute and start and plan:
@@ -124,7 +176,7 @@ class RenewMembershipSerializer(serializers.Serializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    member_name = serializers.CharField(source="member.full_name", read_only=True)
+    member_name = serializers.SerializerMethodField()
     member_id_number = serializers.CharField(source="member.id_number", read_only=True)
 
     class Meta:
@@ -142,6 +194,9 @@ class PaymentSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("created_at", "updated_at", "paid_at")
+
+    def get_member_name(self, obj):
+        return obj.member.display_name()
 
 
 class PaymentWriteSerializer(serializers.ModelSerializer):

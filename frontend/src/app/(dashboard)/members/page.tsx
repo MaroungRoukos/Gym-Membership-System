@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Alert } from "@/components/Alert";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   apiFetch,
   deleteMember,
@@ -11,11 +13,15 @@ import {
 } from "@/lib/api";
 
 export default function MembersPage() {
+  const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState<Member | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -27,19 +33,26 @@ export default function MembersPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
-  async function onDelete(id: number) {
-    if (!confirm("Delete this member?")) return;
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleteError(null);
+    setDeleteLoading(true);
     try {
-      await deleteMember(id);
+      await deleteMember(pendingDelete.id);
+      setPendingDelete(null);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Delete failed");
+      setDeleteError(
+        e instanceof Error ? e.message : "Could not delete member"
+      );
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -62,6 +75,27 @@ export default function MembersPage() {
 
       {error && <Alert type="error">{error}</Alert>}
 
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete member?"
+        message={
+          pendingDelete
+            ? `This will remove ${pendingDelete.full_name} (${pendingDelete.id_number}) and cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        danger
+        loading={deleteLoading}
+        error={deleteError}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          if (!deleteLoading) {
+            setPendingDelete(null);
+            setDeleteError(null);
+          }
+        }}
+      />
+
       {loading ? (
         <p className="text-[var(--muted)]">Loading…</p>
       ) : (
@@ -74,7 +108,7 @@ export default function MembersPage() {
                 <th className="px-4 py-3">Plan</th>
                 <th className="px-4 py-3">End</th>
                 <th className="px-4 py-3">Membership</th>
-                <th className="px-4 py-3">Payment</th>
+                <th className="px-4 py-3">Payment status</th>
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
@@ -92,7 +126,8 @@ export default function MembersPage() {
                 members.map((m) => (
                   <tr
                     key={m.id}
-                    className="border-t border-[var(--border)] hover:bg-[var(--surface)]/40"
+                    onClick={() => router.push(`/members/${m.id}`)}
+                    className="cursor-pointer border-t border-[var(--border)] hover:bg-[var(--surface)]/40"
                   >
                     <td className="px-4 py-3 font-mono text-xs">
                       {m.id_number}
@@ -112,19 +147,31 @@ export default function MembersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 capitalize text-xs">
-                      {m.latest_payment_status ?? "—"}
+                      {m.member_payment_status === "paid" ? (
+                        <span className="text-[var(--success)]">Paid</span>
+                      ) : (
+                        <span className="text-amber-400/90">Pending</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td
+                      className="px-4 py-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Link
                         href={`/members/${m.id}/edit`}
                         className="text-[var(--accent)] hover:underline"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         Edit
                       </Link>
                       <button
                         type="button"
-                        className="ml-3 text-[var(--danger)] hover:underline"
-                        onClick={() => onDelete(m.id)}
+                        className="ml-3 cursor-pointer text-[var(--danger)] hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteError(null);
+                          setPendingDelete(m);
+                        }}
                       >
                         Delete
                       </button>

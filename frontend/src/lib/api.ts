@@ -7,13 +7,22 @@ export type MemberPlan = "monthly" | "quarterly" | "yearly";
 export type MembershipStatus = "active" | "expired";
 export type PaymentStatus = "pending" | "paid" | "failed";
 
+/** Recorded enrollment/dues status on the member (see member_payment_status in API). */
+export type MemberPaymentStatus = "pending" | "paid";
+
 export type Member = {
   id: number;
   id_number: string;
+  first_name: string;
+  last_name: string;
+  /** Combined first + last (read-only from API). */
   full_name: string;
   email: string;
   phone: string;
   plan: MemberPlan;
+  member_payment_status: MemberPaymentStatus;
+  /** When payment was received (can be before membership start). */
+  payment_received_on: string | null;
   start_date: string;
   end_date: string;
   membership_status: MembershipStatus;

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { Alert } from "@/components/Alert";
+import { DateInputWithCalendarButton } from "@/components/DateInputWithCalendarButton";
 import {
   apiFetch,
   assignMembership,
@@ -173,14 +174,20 @@ export default function MembershipPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-[var(--muted)]">Start date</label>
-              <input
-                type="date"
-                required
-                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
-                value={assignStart}
-                onChange={(e) => setAssignStart(e.target.value)}
-              />
+              <label
+                className="text-xs text-[var(--muted)]"
+                htmlFor="assign-start-date"
+              >
+                Start date
+              </label>
+              <div className="mt-1">
+                <DateInputWithCalendarButton
+                  id="assign-start-date"
+                  required
+                  value={assignStart}
+                  onChange={(e) => setAssignStart(e.target.value)}
+                />
+              </div>
             </div>
             <button
               type="submit"

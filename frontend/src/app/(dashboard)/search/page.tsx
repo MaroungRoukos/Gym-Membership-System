@@ -138,7 +138,7 @@ export default function SearchPage() {
                 <th className="px-4 py-2">Plan</th>
                 <th className="px-4 py-2">End</th>
                 <th className="px-4 py-2">Membership</th>
-                <th className="px-4 py-2">Payment</th>
+                <th className="px-4 py-2">Payment status</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -164,8 +164,12 @@ export default function SearchPage() {
                     <td className="px-4 py-2 capitalize">
                       {m.membership_status}
                     </td>
-                    <td className="px-4 py-2 capitalize text-xs">
-                      {m.latest_payment_status ?? "—"}
+                    <td className="px-4 py-2 text-xs">
+                      {m.member_payment_status === "paid" ? (
+                        <span className="text-[var(--success)]">Paid</span>
+                      ) : (
+                        <span className="text-amber-400/90">Pending</span>
+                      )}
                     </td>
                     <td className="px-4 py-2">
                       <Link

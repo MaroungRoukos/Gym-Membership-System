@@ -66,7 +66,9 @@ class MemberViewSet(viewsets.ModelViewSet):
 
         if search:
             qs = qs.filter(
-                Q(full_name__icontains=search) | Q(id_number__icontains=search)
+                Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(id_number__icontains=search)
             )
 
         if membership_status == "active":

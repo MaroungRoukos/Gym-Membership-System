@@ -13,14 +13,17 @@ class PaymentInline(admin.TabularInline):
 class MemberAdmin(admin.ModelAdmin):
     list_display = (
         "id_number",
-        "full_name",
+        "first_name",
+        "last_name",
         "plan",
+        "member_payment_status",
+        "payment_received_on",
         "start_date",
         "end_date",
         "created_at",
     )
-    list_filter = ("plan",)
-    search_fields = ("id_number", "full_name", "email", "phone")
+    list_filter = ("plan", "member_payment_status")
+    search_fields = ("id_number", "first_name", "last_name", "email", "phone")
     readonly_fields = ("id_number",)
     inlines = [PaymentInline]
 
@@ -36,4 +39,9 @@ class PaymentAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("status",)
-    search_fields = ("member__id_number", "member__full_name", "description")
+    search_fields = (
+        "member__id_number",
+        "member__first_name",
+        "member__last_name",
+        "description",
+    )

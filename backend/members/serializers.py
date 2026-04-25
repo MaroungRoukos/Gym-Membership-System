@@ -36,7 +36,12 @@ class MemberSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "id_number",
+            "created_at",
+            "updated_at",
+        )
 
     def get_membership_status(self, obj):
         today = timezone.localdate()
@@ -57,7 +62,6 @@ class MemberWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Member
         fields = (
-            "id_number",
             "full_name",
             "email",
             "phone",

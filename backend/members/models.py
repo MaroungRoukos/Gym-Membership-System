@@ -7,7 +7,14 @@ class Member(models.Model):
         QUARTERLY = "quarterly", "Quarterly"
         YEARLY = "yearly", "Yearly"
 
-    id_number = models.CharField(max_length=64, unique=True, db_index=True)
+    id_number = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        blank=True,
+        null=True,
+        help_text="Set automatically as M + zero-padded primary key (e.g. M000042).",
+    )
     full_name = models.CharField(max_length=255)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
@@ -21,8 +28,23 @@ class Member(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+    def _assign_id_number(self):
+        if self.pk and (not self.id_number or not str(self.id_number).strip()):
+            self.id_number = f"M{int(self.pk):06d}"
+            return True
+        return False
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self.id_number = None
+        super().save(*args, **kwargs)
+        if self._assign_id_number():
+            super().save(update_fields=["id_number", "updated_at"])
+
     def __str__(self):
-        return f"{self.full_name} ({self.id_number})"
+        if self.id_number:
+            return f"{self.full_name} ({self.id_number})"
+        return f"{self.full_name} (pending id)"
 
 
 class Payment(models.Model):

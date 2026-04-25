@@ -21,6 +21,7 @@ class MemberAdmin(admin.ModelAdmin):
     )
     list_filter = ("plan",)
     search_fields = ("id_number", "full_name", "email", "phone")
+    readonly_fields = ("id_number",)
     inlines = [PaymentInline]
 
 

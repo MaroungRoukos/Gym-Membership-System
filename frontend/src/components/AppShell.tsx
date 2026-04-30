@@ -13,6 +13,10 @@ const links = [
   { href: "/expiring", label: "Expiring" },
 ];
 
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -32,10 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </p>
           <nav className="mt-4 flex flex-wrap gap-1 md:flex-col md:gap-0">
             {links.map(({ href, label }) => {
-              const active =
-                href === "/members"
-                  ? pathname.startsWith("/members")
-                  : pathname === href || pathname.startsWith(`${href}/`);
+              const active = isActivePath(pathname, href);
               return (
                 <Link
                   key={href}

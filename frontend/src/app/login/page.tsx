@@ -42,6 +42,7 @@ export default function LoginPage() {
             <input
               id="username"
               autoComplete="username"
+              suppressHydrationWarning
               className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -56,6 +57,7 @@ export default function LoginPage() {
               id="password"
               type="password"
               autoComplete="current-password"
+              suppressHydrationWarning
               className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

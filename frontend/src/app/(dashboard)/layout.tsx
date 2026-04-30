@@ -11,15 +11,13 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [ok, setOk] = useState(false);
+  const [ok] = useState(() => Boolean(getAccessToken()));
 
   useEffect(() => {
-    if (!getAccessToken()) {
+    if (!ok) {
       router.replace("/login");
-      return;
     }
-    setOk(true);
-  }, [router]);
+  }, [ok, router]);
 
   if (!ok) {
     return (

@@ -36,11 +36,41 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Overview of members, memberships, and revenue.
-        </p>
+      <div
+        className="relative overflow-hidden rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)]"
+        style={{
+          backgroundImage:
+            "linear-gradient(120deg, rgba(10,15,26,0.88), rgba(15,24,40,0.65)), url('https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=1600&q=80')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div className="p-6 md:p-8">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
+            Gym Operations
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold text-white md:text-3xl">
+            Dashboard
+          </h1>
+          <p className="mt-2 max-w-xl text-sm text-slate-200/90">
+            Monitor memberships, payments, and upcoming expirations from one
+            place.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link
+              href="/members/new"
+              className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--accent-hover)]"
+            >
+              Add new member
+            </Link>
+            <Link
+              href="/payments"
+              className="rounded-lg border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
+            >
+              Open payments
+            </Link>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -78,9 +108,9 @@ export default function DashboardPage() {
         {data.expiring_memberships.length === 0 ? (
           <Alert type="info">No memberships expiring in this window.</Alert>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+          <div className="overflow-x-auto rounded-xl border border-[var(--border)]/80 bg-[var(--surface)]/70">
             <table className="w-full min-w-[600px] text-left text-sm">
-              <thead className="bg-[var(--surface)] text-[var(--muted)]">
+              <thead className="bg-[var(--surface-soft)]/70 text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-2">Name</th>
                   <th className="px-4 py-2">ID</th>

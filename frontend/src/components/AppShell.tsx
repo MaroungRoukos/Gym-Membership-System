@@ -29,8 +29,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      <aside className="border-b border-[var(--border)] bg-[var(--surface)] md:w-56 md:border-b-0 md:border-r md:shrink-0">
-        <div className="p-4">
+      <aside className="border-b border-[var(--border)]/70 bg-[var(--surface)]/90 backdrop-blur md:w-60 md:border-b-0 md:border-r md:shrink-0">
+        <div className="p-4 md:p-5">
           <p className="text-sm font-semibold text-[var(--muted)]">
             Gym admin
           </p>
@@ -41,10 +41,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={href}
                   href={href}
-                  className={`rounded-lg px-3 py-2 text-sm ${
+                  className={`rounded-lg px-3 py-2 text-sm transition ${
                     active
-                      ? "bg-[var(--background)] text-white"
-                      : "text-[var(--muted)] hover:bg-[var(--background)]/60"
+                      ? "bg-[var(--accent)]/20 text-white ring-1 ring-[var(--accent)]/35"
+                      : "text-[var(--muted)] hover:bg-[var(--background)]/50 hover:text-[var(--foreground)]"
                   }`}
                 >
                   {label}
@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={onLogout}
-            className="mt-6 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--background)]"
+            className="mt-6 w-full rounded-lg border border-[var(--border)]/90 bg-[var(--background)]/35 px-3 py-2 text-left text-sm transition hover:border-[var(--muted)]/60 hover:bg-[var(--background)]/60"
           >
             Log out
           </button>

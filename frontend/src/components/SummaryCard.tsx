@@ -8,11 +8,11 @@ export function SummaryCard({
   hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+    <div className="rounded-xl border border-[var(--border)]/85 bg-[var(--surface)]/85 p-5 shadow-[0_8px_24px_-14px_rgba(0,0,0,0.8)] backdrop-blur">
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
         {title}
       </p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{value}</p>
       {hint ? (
         <p className="mt-1 text-xs text-[var(--muted)]">{hint}</p>
       ) : null}

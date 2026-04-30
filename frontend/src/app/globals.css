@@ -1,21 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f1419;
-  --foreground: #e7ecf1;
-  --surface: #1a2332;
-  --border: #2d3a4d;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --success: #22c55e;
-  --danger: #ef4444;
-  --muted: #94a3b8;
+  --background: #090d16;
+  --foreground: #eef3ff;
+  --surface: #121a2a;
+  --surface-soft: #19243a;
+  --border: #2b3b59;
+  --accent: #4f9cff;
+  --accent-hover: #3c83e0;
+  --success: #34d399;
+  --danger: #f87171;
+  --muted: #9fb1cc;
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  background:
+    radial-gradient(1200px 800px at 20% -10%, #203765 0%, transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, #2c1f47 0%, transparent 55%),
+    var(--background);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+::selection {
+  background: rgba(79, 156, 255, 0.35);
+  color: #ffffff;
 }
 
 /* Make the small built-in calendar glyph easier to see and click in dark UI. */

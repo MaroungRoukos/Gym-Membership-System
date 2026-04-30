@@ -5,16 +5,16 @@ export function Alert({
   type?: "info" | "success" | "error";
   children: React.ReactNode;
 }) {
-  const border =
+  const tone =
     type === "error"
-      ? "border-[var(--danger)] text-[var(--danger)]"
+      ? "border-[var(--danger)]/55 bg-[var(--danger)]/10 text-rose-200"
       : type === "success"
-        ? "border-[var(--success)] text-[var(--success)]"
-        : "border-[var(--border)] text-[var(--muted)]";
+        ? "border-[var(--success)]/55 bg-[var(--success)]/10 text-emerald-200"
+        : "border-[var(--border)] bg-[var(--surface)]/70 text-[var(--muted)]";
   return (
     <div
       role="alert"
-      className={`rounded-lg border px-4 py-3 text-sm ${border}`}
+      className={`rounded-lg border px-4 py-3 text-sm backdrop-blur ${tone}`}
     >
       {children}
     </div>

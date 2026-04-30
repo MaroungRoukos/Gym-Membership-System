@@ -34,6 +34,9 @@ export function endDateForPlanFromStart(
   if (plan === "monthly") dt.setMonth(dt.getMonth() + 1);
   else if (plan === "quarterly") dt.setMonth(dt.getMonth() + 3);
   else if (plan === "yearly") dt.setFullYear(dt.getFullYear() + 1);
+  else if (plan === "student") dt.setMonth(dt.getMonth() + 1);
+  else if (plan === "family") dt.setMonth(dt.getMonth() + 1);
+  else if (plan === "custom") dt.setMonth(dt.getMonth() + 1);
   const pad = (n: number) => (n < 10 ? "0" : "") + n;
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }

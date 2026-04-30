@@ -1,0 +1,176 @@
+[
+  {
+    "model": "auth.user",
+    "pk": 1,
+    "fields": {
+      "password": "pbkdf2_sha256$1200000$9EAiH0tnYZYf5tendekrl2$Fv+MZPvydu0+6KwJzzjqkWpxeLi/mInrwxks6rzXjec=",
+      "last_login": null,
+      "is_superuser": true,
+      "username": "admin",
+      "first_name": "",
+      "last_name": "",
+      "email": "admin@example.com",
+      "is_staff": true,
+      "is_active": true,
+      "date_joined": "2026-04-30T10:13:45.162Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 2,
+    "fields": {
+      "password": "pbkdf2_sha256$1200000$MjsHD7M4f0Zq217kTaLDVL$djCxzmRgqOe/wm0tz/KURtluE8BGki8YIoIJZE2QxEc=",
+      "last_login": "2026-04-30T10:21:38.242Z",
+      "is_superuser": true,
+      "username": "mario",
+      "first_name": "",
+      "last_name": "",
+      "email": "",
+      "is_staff": true,
+      "is_active": true,
+      "date_joined": "2026-04-30T10:19:23.110Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "sessions.session",
+    "pk": "7lxcgyvrrii2ak85gg1l5ar1s1srgcyq",
+    "fields": {
+      "session_data": ".eJxVjMsOwiAQRf-FtSG8B1y69xsIHQapGkhKuzL-uzbpQrf3nHNfLKZtrXEbtMQ5szNT7PS7TQkf1HaQ76ndOsfe1mWe-K7wgw5-7Zmel8P9O6hp1G9tLBhPpWhtgWTKAdELJaQojlyRpgQniIJEDYDOGwjBOshaGUUekmDvD9D6NwU:1wIOWY:tK645qr4d3ef-AgEBwxi1iwGDpJ4sj1pFXsj0yymL48",
+      "expire_date": "2026-05-14T10:21:38.256Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 1,
+    "fields": {
+      "user": 1,
+      "jti": "c1a10442a21d454aaf70ead4b6269fa0",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE0OTA5OSwiaWF0IjoxNzc3NTQ0Mjk5LCJqdGkiOiJjMWExMDQ0MmEyMWQ0NTRhYWY3MGVhZDRiNjI2OWZhMCIsInVzZXJfaWQiOiIxIn0.16s-uajvBWafqltzbRm7PQByUz2f9tjNXt_MK8l07Ok",
+      "created_at": "2026-04-30T10:18:19.495Z",
+      "expires_at": "2026-05-07T10:18:19Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 2,
+    "fields": {
+      "user": 1,
+      "jti": "74d4732438ee454cb8759ccc0ae74272",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MDYwMiwiaWF0IjoxNzc3NTQ1ODAyLCJqdGkiOiI3NGQ0NzMyNDM4ZWU0NTRjYjg3NTljY2MwYWU3NDI3MiIsInVzZXJfaWQiOiIxIn0.Af_Qs9Y1_P7Kt6zCK4w2cKJWG-UdimRw5fSqyNdYojo",
+      "created_at": "2026-04-30T10:43:22.243Z",
+      "expires_at": "2026-05-07T10:43:22Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 3,
+    "fields": {
+      "user": 1,
+      "jti": "7923b2cf17174cf694488943d3c96331",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MDY0MSwiaWF0IjoxNzc3NTQ1ODQxLCJqdGkiOiI3OTIzYjJjZjE3MTc0Y2Y2OTQ0ODg5NDNkM2M5NjMzMSIsInVzZXJfaWQiOiIxIn0.nDY76IGIB1YtoS0q7dvAq-b2RS4HYI-DU9NvCnUw1pI",
+      "created_at": "2026-04-30T10:44:01.777Z",
+      "expires_at": "2026-05-07T10:44:01Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 4,
+    "fields": {
+      "user": 1,
+      "jti": "95d9928cd32b409dbd3ac4f0e2666090",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjc3NywiaWF0IjoxNzc3NTQ3OTc3LCJqdGkiOiI5NWQ5OTI4Y2QzMmI0MDlkYmQzYWM0ZjBlMjY2NjA5MCIsInVzZXJfaWQiOiIxIn0._zJpG_GjyBH_ZfjX87fR0VBYnF_dHU4EWrMAt5NwKPw",
+      "created_at": "2026-04-30T11:19:37.663Z",
+      "expires_at": "2026-05-07T11:19:37Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 5,
+    "fields": {
+      "user": 1,
+      "jti": "8604f553de0a49afa92a48499ddc609b",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjc5MiwiaWF0IjoxNzc3NTQ3OTkyLCJqdGkiOiI4NjA0ZjU1M2RlMGE0OWFmYTkyYTQ4NDk5ZGRjNjA5YiIsInVzZXJfaWQiOiIxIn0.jbvKa3j0Rok5ryEtFLm7MFEj6VQ9zFqM6sn9qW8b4no",
+      "created_at": "2026-04-30T11:19:52.330Z",
+      "expires_at": "2026-05-07T11:19:52Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 6,
+    "fields": {
+      "user": 1,
+      "jti": "e3dc01be6c394632aaf406d41dae8538",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjg4NiwiaWF0IjoxNzc3NTQ4MDg2LCJqdGkiOiJlM2RjMDFiZTZjMzk0NjMyYWFmNDA2ZDQxZGFlODUzOCIsInVzZXJfaWQiOiIxIn0.1KQrlkIzPy1ikZN_Qr7a4l9cbkesH_JDfh0jkF91Bj4",
+      "created_at": "2026-04-30T11:21:26.407Z",
+      "expires_at": "2026-05-07T11:21:26Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 7,
+    "fields": {
+      "user": 1,
+      "jti": "8de94352eb06470ab53c01d5a62e576c",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MjkwNCwiaWF0IjoxNzc3NTQ4MTA0LCJqdGkiOiI4ZGU5NDM1MmViMDY0NzBhYjUzYzAxZDVhNjJlNTc2YyIsInVzZXJfaWQiOiIxIn0.8mhwRXHq0M9CMyiXIX0s-LZeiB2SJDBmiG4CMoWCQTE",
+      "created_at": "2026-04-30T11:21:44.811Z",
+      "expires_at": "2026-05-07T11:21:44Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 8,
+    "fields": {
+      "user": 1,
+      "jti": "82a526fbb2b1483d90df88078621c6d0",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjk1NCwiaWF0IjoxNzc3NTQ4MTU0LCJqdGkiOiI4MmE1MjZmYmIyYjE0ODNkOTBkZjg4MDc4NjIxYzZkMCIsInVzZXJfaWQiOiIxIn0.pjFQCc-cr6eZ6RsxVxBG8CNApxpbFLEBHYuigbdiCG4",
+      "created_at": "2026-04-30T11:22:34.692Z",
+      "expires_at": "2026-05-07T11:22:34Z"
+    }
+  },
+  {
+    "model": "token_blacklist.outstandingtoken",
+    "pk": 9,
+    "fields": {
+      "user": 1,
+      "jti": "b0624c46b0f14469b6be0616d79d3c8f",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MzIwOSwiaWF0IjoxNzc3NTQ4NDA5LCJqdGkiOiJiMDYyNGM0NmIwZjE0NDY5YjZiZTA2MTZkNzlkM2M4ZiIsInVzZXJfaWQiOiIxIn0.hUpiWFVef5iHGQ46ahEI1TKMh9uQOUGYwWVf6kuJSAU",
+      "created_at": "2026-04-30T11:26:49.850Z",
+      "expires_at": "2026-05-07T11:26:49Z"
+    }
+  },
+  {
+    "model": "members.member",
+    "pk": 1,
+    "fields": {
+      "id_number": "M000001",
+      "first_name": "Mario",
+      "last_name": "Massoud",
+      "email": "marioo.massoud@gmail.com",
+      "phone": "+96176561550",
+      "plan": "monthly",
+      "custom_plan_name": "",
+      "discount_percent": "0.00",
+      "member_payment_status": "paid",
+      "payment_received_on": "2026-04-30",
+      "start_date": "2026-04-30",
+      "end_date": "2026-05-30",
+      "created_at": "2026-04-30T10:48:57.382Z",
+      "updated_at": "2026-04-30T10:56:03.091Z"
+    }
+  },
+  {
+    "model": "members.gymsetting",
+    "pk": 1,
+    "fields": {
+      "gym_name": "Gym Admin",
+      "logo_url": "",
+      "currency": "USD",
+      "admin_display_name": "",
+      "updated_at": "2026-04-30T11:19:52.494Z"
+    }
+  }
+]

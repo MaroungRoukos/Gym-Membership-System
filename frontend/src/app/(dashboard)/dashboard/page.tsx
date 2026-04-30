@@ -84,6 +84,40 @@ export default function DashboardPage() {
           value={data.expired_memberships}
         />
         <SummaryCard
+          title="Not active (unpaid)"
+          value={data.not_active_memberships}
+        />
+        <SummaryCard
+          title="Expiring soon"
+          value={data.expiring_soon}
+          hint={`Within ${data.expiring_days} days`}
+        />
+        <SummaryCard
+          title="Unpaid balances"
+          value={`$${Number(data.unpaid_balances).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`}
+        />
+        <SummaryCard
+          title="Monthly revenue"
+          value={`$${Number(data.monthly_revenue).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`}
+        />
+        <SummaryCard
+          title="Yearly revenue"
+          value={`$${Number(data.yearly_revenue).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`}
+        />
+        <SummaryCard
+          title="New members this month"
+          value={data.new_members_this_month}
+        />
+        <SummaryCard
           title="Total revenue"
           value={`$${Number(data.total_revenue).toLocaleString(undefined, {
             minimumFractionDigits: 2,

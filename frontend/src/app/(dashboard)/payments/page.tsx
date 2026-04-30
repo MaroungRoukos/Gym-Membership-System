@@ -10,6 +10,7 @@ import {
   membersQuery,
   updatePayment,
   type Member,
+  type PaymentMethod,
   type Payment,
   type PaymentStatus,
 } from "@/lib/api";
@@ -22,11 +23,16 @@ export default function PaymentsPage() {
   const [memberId, setMemberId] = useState<number | "">("");
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<PaymentStatus>("pending");
+  const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [dueDate, setDueDate] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +64,7 @@ export default function PaymentsPage() {
   }, [filterMember, filterStatus]);
 
   useEffect(() => {
+    setPage(1);
     load();
   }, [load]);
 
@@ -72,11 +79,17 @@ export default function PaymentsPage() {
         member: Number(memberId),
         amount,
         status,
+        method,
+        due_date: dueDate || null,
+        invoice_number: invoiceNumber || undefined,
         description,
       });
       setAmount("");
       setDescription("");
       setStatus("pending");
+      setMethod("cash");
+      setDueDate("");
+      setInvoiceNumber("");
       setSuccess("Payment recorded.");
       await load();
     } catch (err) {
@@ -94,6 +107,8 @@ export default function PaymentsPage() {
       alert(e instanceof Error ? e.message : "Update failed");
     }
   }
+  const totalPages = Math.max(1, Math.ceil(payments.length / pageSize));
+  const pagedPayments = payments.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-8">
@@ -152,7 +167,38 @@ export default function PaymentsPage() {
               <option value="pending">Pending</option>
               <option value="paid">Paid</option>
               <option value="failed">Failed</option>
+              <option value="overdue">Overdue</option>
             </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--muted)]">Method</label>
+            <select
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 capitalize"
+              value={method}
+              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+            >
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="transfer">Bank transfer</option>
+              <option value="online">Online</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--muted)]">Due date</label>
+            <input
+              type="date"
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--muted)]">Invoice #</label>
+            <input
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+            />
           </div>
           <div>
             <label className="text-xs text-[var(--muted)]">Description</label>
@@ -206,6 +252,7 @@ export default function PaymentsPage() {
                 <option value="pending">Pending</option>
                 <option value="paid">Paid</option>
                 <option value="failed">Failed</option>
+                <option value="overdue">Overdue</option>
               </select>
             </div>
           </div>
@@ -223,6 +270,8 @@ export default function PaymentsPage() {
                 <th className="px-4 py-2">Member</th>
                 <th className="px-4 py-2">Amount</th>
                 <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Method</th>
+                <th className="px-4 py-2">Due</th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
@@ -230,14 +279,14 @@ export default function PaymentsPage() {
               {payments.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-[var(--muted)]"
                   >
                     No payments match.
                   </td>
                 </tr>
               ) : (
-                payments.map((p) => (
+                pagedPayments.map((p) => (
                   <tr key={p.id} className="border-t border-[var(--border)]">
                     <td className="px-4 py-2 text-xs">
                       {new Date(p.created_at).toLocaleString()}
@@ -255,6 +304,8 @@ export default function PaymentsPage() {
                     </td>
                     <td className="px-4 py-2 tabular-nums">${p.amount}</td>
                     <td className="px-4 py-2 capitalize">{p.status}</td>
+                    <td className="px-4 py-2 capitalize">{p.method}</td>
+                    <td className="px-4 py-2">{p.due_date ?? "—"}</td>
                     <td className="px-4 py-2 space-x-2 text-xs">
                       {p.status !== "paid" && (
                         <button
@@ -274,6 +325,15 @@ export default function PaymentsPage() {
                           Failed
                         </button>
                       )}
+                      {p.status !== "overdue" && (
+                        <button
+                          type="button"
+                          className="text-amber-300 hover:underline"
+                          onClick={() => patchPayment(p.id, "overdue")}
+                        >
+                          Overdue
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -282,6 +342,27 @@ export default function PaymentsPage() {
           </table>
         </div>
       )}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
+        >
+          Prev
+        </button>
+        <span className="text-xs text-[var(--muted)]">
+          Page {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }

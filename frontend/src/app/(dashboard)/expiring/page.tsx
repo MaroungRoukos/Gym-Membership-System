@@ -48,7 +48,7 @@ export default function ExpiringPage() {
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
           >
-            {[7, 14, 30, 60, 90].map((d) => (
+            {[7, 14, 30, 60].map((d) => (
               <option key={d} value={d}>
                 {d} days
               </option>

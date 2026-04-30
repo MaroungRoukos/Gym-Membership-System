@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Member, Payment
+from .models import (
+    AttendanceCheckin,
+    GymSetting,
+    Member,
+    MemberNote,
+    MembershipHistory,
+    Payment,
+)
 
 
 class PaymentInline(admin.TabularInline):
@@ -45,3 +52,28 @@ class PaymentAdmin(admin.ModelAdmin):
         "member__last_name",
         "description",
     )
+
+
+@admin.register(MemberNote)
+class MemberNoteAdmin(admin.ModelAdmin):
+    list_display = ("member", "created_at")
+    search_fields = ("member__id_number", "member__first_name", "member__last_name", "body")
+
+
+@admin.register(MembershipHistory)
+class MembershipHistoryAdmin(admin.ModelAdmin):
+    list_display = ("member", "event", "plan", "start_date", "end_date", "created_at")
+    list_filter = ("event", "plan", "payment_status")
+    search_fields = ("member__id_number", "member__first_name", "member__last_name")
+
+
+@admin.register(AttendanceCheckin)
+class AttendanceCheckinAdmin(admin.ModelAdmin):
+    list_display = ("member", "source", "checked_in_at")
+    list_filter = ("source",)
+    search_fields = ("member__id_number", "member__first_name", "member__last_name")
+
+
+@admin.register(GymSetting)
+class GymSettingAdmin(admin.ModelAdmin):
+    list_display = ("gym_name", "currency", "admin_display_name", "updated_at")

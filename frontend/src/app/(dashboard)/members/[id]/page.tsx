@@ -5,10 +5,19 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
 import {
+  addMemberNote,
+  fetchCheckins,
   fetchMember,
+  fetchMemberNotes,
+  fetchMembershipHistory,
+  fetchPayments,
   markMemberPaid,
+  type Checkin,
   type Member,
+  type MemberNote,
   type MemberPlan,
+  type MembershipHistory,
+  type Payment,
 } from "@/lib/api";
 
 function formatDate(iso: string | null) {
@@ -53,6 +62,9 @@ function planLabel(plan: MemberPlan) {
     monthly: "Monthly",
     quarterly: "Quarterly",
     yearly: "Yearly",
+    student: "Student",
+    family: "Family",
+    custom: "Custom",
   };
   return labels[plan];
 }
@@ -119,6 +131,12 @@ export default function MemberDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState(false);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<MemberNote[]>([]);
+  const [history, setHistory] = useState<MembershipHistory[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [checkins, setCheckins] = useState<Checkin[]>([]);
+  const [noteBody, setNoteBody] = useState("");
+  const [addingNote, setAddingNote] = useState(false);
 
   const initials = useMemo(
     () => (member ? memberInitials(member) : ""),
@@ -133,7 +151,19 @@ export default function MemberDetailsPage() {
       setLoading(true);
       try {
         const m = await fetchMember(id);
-        if (!cancelled) setMember(m);
+        const [n, h, p, c] = await Promise.all([
+          fetchMemberNotes(id),
+          fetchMembershipHistory(id),
+          fetchPayments({ member: id }),
+          fetchCheckins({ member: id }),
+        ]);
+        if (!cancelled) {
+          setMember(m);
+          setNotes(n);
+          setHistory(h);
+          setPayments(p);
+          setCheckins(c);
+        }
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Failed to load");
@@ -189,6 +219,7 @@ export default function MemberDetailsPage() {
   }
 
   async function onMarkPaid() {
+    if (!member) return;
     setPaymentActionError(null);
     setMarkingPaid(true);
     try {
@@ -200,6 +231,22 @@ export default function MemberDetailsPage() {
       );
     } finally {
       setMarkingPaid(false);
+    }
+  }
+
+  async function onAddNote() {
+    if (!member || !noteBody.trim()) return;
+    setAddingNote(true);
+    setPaymentActionError(null);
+    try {
+      await addMemberNote(member.id, noteBody.trim());
+      const refreshed = await fetchMemberNotes(member.id);
+      setNotes(refreshed);
+      setNoteBody("");
+    } catch (e) {
+      setPaymentActionError(e instanceof Error ? e.message : "Could not save note.");
+    } finally {
+      setAddingNote(false);
     }
   }
 
@@ -333,8 +380,16 @@ export default function MemberDetailsPage() {
               <DataRow
                 label="Plan"
                 value={
-                  <span className="font-medium">{planLabel(member.plan)}</span>
+                  <span className="font-medium">
+                    {member.plan === "custom" && member.custom_plan_name
+                      ? member.custom_plan_name
+                      : planLabel(member.plan)}
+                  </span>
                 }
+              />
+              <DataRow
+                label="Discount"
+                value={<span>{Number(member.discount_percent || 0)}%</span>}
               />
               <DataRow
                 label="Start date"
@@ -410,6 +465,95 @@ export default function MemberDetailsPage() {
                 }
               />
             </dl>
+          </Panel>
+        </div>
+        <div className="grid gap-3 border-t border-[var(--border)] p-3 sm:grid-cols-2 sm:gap-4 sm:p-4">
+          <Panel title="Notes">
+            <div className="space-y-3 py-2">
+              <textarea
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+                rows={3}
+                value={noteBody}
+                onChange={(e) => setNoteBody(e.target.value)}
+                placeholder="Add staff notes..."
+              />
+              <button
+                type="button"
+                onClick={onAddNote}
+                disabled={addingNote || !noteBody.trim()}
+                className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {addingNote ? "Saving..." : "Add note"}
+              </button>
+              {notes.length === 0 ? (
+                <p className="text-xs text-[var(--muted)]">No notes yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {notes.map((n) => (
+                    <div key={n.id} className="rounded-md border border-[var(--border)]/70 p-2">
+                      <p className="text-sm">{n.body}</p>
+                      <p className="mt-1 text-[0.7rem] text-[var(--muted)]">
+                        {new Date(n.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Panel>
+          <Panel title="Membership history">
+            <div className="space-y-2 py-2">
+              {history.length === 0 ? (
+                <p className="text-xs text-[var(--muted)]">No membership history yet.</p>
+              ) : (
+                history.map((h) => (
+                  <div key={h.id} className="rounded-md border border-[var(--border)]/70 p-2">
+                    <p className="text-sm capitalize">
+                      {h.event} · {h.plan}
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {h.start_date} to {h.end_date} ({h.payment_status})
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </Panel>
+        </div>
+        <div className="grid gap-3 border-t border-[var(--border)] p-3 sm:grid-cols-2 sm:gap-4 sm:p-4">
+          <Panel title="Payment history">
+            <div className="space-y-2 py-2">
+              {payments.length === 0 ? (
+                <p className="text-xs text-[var(--muted)]">No payments yet.</p>
+              ) : (
+                payments.slice(0, 10).map((p) => (
+                  <div key={p.id} className="rounded-md border border-[var(--border)]/70 p-2">
+                    <p className="text-sm">
+                      ${p.amount} · <span className="capitalize">{p.status}</span>
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {p.method}
+                      {p.invoice_number ? ` · ${p.invoice_number}` : ""} ·{" "}
+                      {new Date(p.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </Panel>
+          <Panel title="Attendance history">
+            <div className="space-y-2 py-2">
+              {checkins.length === 0 ? (
+                <p className="text-xs text-[var(--muted)]">No check-ins yet.</p>
+              ) : (
+                checkins.slice(0, 12).map((c) => (
+                  <div key={c.id} className="rounded-md border border-[var(--border)]/70 p-2">
+                    <p className="text-sm">{new Date(c.checked_in_at).toLocaleString()}</p>
+                    <p className="text-xs capitalize text-[var(--muted)]">{c.source}</p>
+                  </div>
+                ))
+              )}
+            </div>
           </Panel>
         </div>
       </article>

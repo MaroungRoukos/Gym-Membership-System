@@ -20,22 +20,31 @@ export default function MembersPage() {
   const [pendingDelete, setPendingDelete] = useState<Member | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<"name" | "end_date">("name");
+  const pageSize = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await apiFetch<Member[]>(membersQuery({}));
-      setMembers(data);
+      const sorted = [...data].sort((a, b) =>
+        sortBy === "name"
+          ? a.full_name.localeCompare(b.full_name)
+          : a.end_date.localeCompare(b.end_date)
+      );
+      setMembers(sorted);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
       setMembers([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sortBy]);
 
   useEffect(() => {
+    setPage(1);
     load();
   }, [load]);
 
@@ -55,6 +64,8 @@ export default function MembersPage() {
       setDeleteLoading(false);
     }
   }
+  const totalPages = Math.max(1, Math.ceil(members.length / pageSize));
+  const pagedMembers = members.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-6">
@@ -71,6 +82,17 @@ export default function MembersPage() {
         >
           Add member
         </Link>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-[var(--muted)]">{members.length} members</p>
+        <select
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as "name" | "end_date")}
+        >
+          <option value="name">Sort by name</option>
+          <option value="end_date">Sort by end date</option>
+        </select>
       </div>
 
       {error && <Alert type="error">{error}</Alert>}
@@ -123,7 +145,7 @@ export default function MembersPage() {
                   </td>
                 </tr>
               ) : (
-                members.map((m) => (
+                pagedMembers.map((m) => (
                   <tr
                     key={m.id}
                     onClick={() => router.push(`/members/${m.id}`)}
@@ -183,6 +205,27 @@ export default function MembersPage() {
           </table>
         </div>
       )}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
+        >
+          Prev
+        </button>
+        <span className="text-xs text-[var(--muted)]">
+          Page {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }

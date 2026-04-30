@@ -9,15 +9,28 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import Member, Payment, RecordedMemberPaymentStatus
+from .models import (
+    AttendanceCheckin,
+    GymSetting,
+    Member,
+    MemberNote,
+    MembershipHistory,
+    Payment,
+    RecordedMemberPaymentStatus,
+)
 from .serializers import (
     AdminTokenObtainPairSerializer,
     AssignMembershipSerializer,
+    AttendanceCheckinSerializer,
+    GymSettingSerializer,
     MemberSerializer,
+    MemberNoteSerializer,
     MemberWriteSerializer,
+    MembershipHistorySerializer,
     PaymentSerializer,
     PaymentUpdateSerializer,
     PaymentWriteSerializer,
+    QuickCheckinSerializer,
     RenewMembershipSerializer,
 )
 
@@ -43,6 +56,17 @@ def _member_for_response(pk, context):
     return MemberSerializer(inst, context=context).data
 
 
+def _record_membership_history(member: Member, event: str):
+    MembershipHistory.objects.create(
+        member=member,
+        event=event,
+        plan=member.plan,
+        start_date=member.start_date,
+        end_date=member.end_date,
+        payment_status=member.member_payment_status,
+    )
+
+
 class MemberViewSet(viewsets.ModelViewSet):
     """Administrator-only CRUD, search, filters, renew, assign membership."""
 
@@ -62,6 +86,9 @@ class MemberViewSet(viewsets.ModelViewSet):
         membership_status = self.request.query_params.get("status")
         plan = self.request.query_params.get("plan")
         payment_status = self.request.query_params.get("payment_status")
+        phone = (self.request.query_params.get("phone") or "").strip()
+        expiry_before = self.request.query_params.get("expiry_before")
+        expiry_after = self.request.query_params.get("expiry_after")
         today = timezone.localdate()
 
         if search:
@@ -69,7 +96,10 @@ class MemberViewSet(viewsets.ModelViewSet):
                 Q(first_name__icontains=search)
                 | Q(last_name__icontains=search)
                 | Q(id_number__icontains=search)
+                | Q(phone__icontains=search)
             )
+        if phone:
+            qs = qs.filter(phone__icontains=phone)
 
         if membership_status == "active":
             qs = qs.filter(
@@ -94,10 +124,15 @@ class MemberViewSet(viewsets.ModelViewSet):
             Payment.Status.PENDING,
             Payment.Status.PAID,
             Payment.Status.FAILED,
+            Payment.Status.OVERDUE,
         ):
             qs = qs.filter(
                 _payment_count__gt=0, latest_payment_status=payment_status
             )
+        if expiry_before:
+            qs = qs.filter(end_date__lte=expiry_before)
+        if expiry_after:
+            qs = qs.filter(end_date__gte=expiry_after)
 
         return qs
 
@@ -105,6 +140,7 @@ class MemberViewSet(viewsets.ModelViewSet):
         write = MemberWriteSerializer(data=request.data)
         write.is_valid(raise_exception=True)
         self.perform_create(write)
+        _record_membership_history(write.instance, MembershipHistory.Event.CREATED)
         data = _member_for_response(write.instance.pk, self.get_serializer_context())
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_201_CREATED, headers=headers)
@@ -122,6 +158,7 @@ class MemberViewSet(viewsets.ModelViewSet):
         )
         write.is_valid(raise_exception=True)
         self.perform_update(write)
+        _record_membership_history(write.instance, MembershipHistory.Event.UPDATED)
         data = _member_for_response(write.instance.pk, self.get_serializer_context())
         return Response(data)
 
@@ -131,6 +168,7 @@ class MemberViewSet(viewsets.ModelViewSet):
         ser = RenewMembershipSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         ser.save(member=member)
+        _record_membership_history(member, MembershipHistory.Event.RENEWED)
         data = _member_for_response(member.pk, self.get_serializer_context())
         return Response(data)
 
@@ -140,6 +178,7 @@ class MemberViewSet(viewsets.ModelViewSet):
         ser = AssignMembershipSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         ser.save(member=member)
+        _record_membership_history(member, MembershipHistory.Event.ASSIGNED)
         data = _member_for_response(member.pk, self.get_serializer_context())
         return Response(data)
 
@@ -150,6 +189,7 @@ class MemberViewSet(viewsets.ModelViewSet):
         if not member.payment_received_on:
             member.payment_received_on = timezone.localdate()
         member.save(update_fields=["member_payment_status", "payment_received_on", "updated_at"])
+        _record_membership_history(member, MembershipHistory.Event.UPDATED)
         data = _member_for_response(member.pk, self.get_serializer_context())
         return Response(data)
 
@@ -178,6 +218,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             Payment.Status.PENDING,
             Payment.Status.PAID,
             Payment.Status.FAILED,
+            Payment.Status.OVERDUE,
         ):
             qs = qs.filter(status=st)
         return qs
@@ -189,6 +230,55 @@ class PaymentViewSet(viewsets.ModelViewSet):
         out = PaymentSerializer(
             payment, context=self.get_serializer_context()
         )
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
+
+class MemberNoteViewSet(viewsets.ModelViewSet):
+    queryset = MemberNote.objects.select_related("member").all()
+    serializer_class = MemberNoteSerializer
+    permission_classes = [IsAdminUser]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        member_id = self.request.query_params.get("member")
+        if member_id:
+            qs = qs.filter(member_id=member_id)
+        return qs
+
+
+class MembershipHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MembershipHistory.objects.select_related("member").all()
+    serializer_class = MembershipHistorySerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        member_id = self.request.query_params.get("member")
+        if member_id:
+            qs = qs.filter(member_id=member_id)
+        return qs
+
+
+class AttendanceCheckinViewSet(viewsets.ModelViewSet):
+    queryset = AttendanceCheckin.objects.select_related("member").all()
+    serializer_class = AttendanceCheckinSerializer
+    permission_classes = [IsAdminUser]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        member_id = self.request.query_params.get("member")
+        if member_id:
+            qs = qs.filter(member_id=member_id)
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="quick")
+    def quick(self, request):
+        ser = QuickCheckinSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        checkin = ser.save()
+        out = AttendanceCheckinSerializer(checkin, context=self.get_serializer_context())
         return Response(out.data, status=status.HTTP_201_CREATED)
 
 
@@ -207,11 +297,37 @@ class DashboardView(APIView):
             end_date__lt=today,
             member_payment_status=RecordedMemberPaymentStatus.PAID,
         ).count()
+        not_active_memberships = members.exclude(
+            member_payment_status=RecordedMemberPaymentStatus.PAID
+        ).count()
 
         paid_agg = Payment.objects.filter(status=Payment.Status.PAID).aggregate(
             total=Sum("amount")
         )
         total_revenue = paid_agg["total"] or 0
+
+        month_start = today.replace(day=1)
+        year_start = today.replace(month=1, day=1)
+        monthly_revenue = (
+            Payment.objects.filter(
+                status=Payment.Status.PAID,
+                created_at__date__gte=month_start,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+        yearly_revenue = (
+            Payment.objects.filter(
+                status=Payment.Status.PAID,
+                created_at__date__gte=year_start,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+        new_members_this_month = members.filter(created_at__date__gte=month_start).count()
+        unpaid_balance = (
+            Payment.objects.filter(status__in=[Payment.Status.PENDING, Payment.Status.OVERDUE])
+            .aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
 
         horizon = request.query_params.get("expiring_days", "30")
         try:
@@ -227,6 +343,7 @@ class DashboardView(APIView):
             )
             .order_by("end_date")[:50]
         )
+        expiring_soon = expiring.count()
         expiring_data = MemberSerializer(
             _annotate_member_payment_fields(expiring), many=True
         ).data
@@ -236,8 +353,84 @@ class DashboardView(APIView):
                 "total_members": total_members,
                 "active_memberships": active_memberships,
                 "expired_memberships": expired_memberships,
+                "not_active_memberships": not_active_memberships,
                 "total_revenue": str(total_revenue),
+                "monthly_revenue": str(monthly_revenue),
+                "yearly_revenue": str(yearly_revenue),
+                "new_members_this_month": new_members_this_month,
+                "unpaid_balances": str(unpaid_balance),
+                "expiring_soon": expiring_soon,
                 "expiring_memberships": expiring_data,
                 "expiring_days": days,
             }
         )
+
+
+class ReportsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        today = timezone.localdate()
+        months = []
+        for i in range(5, -1, -1):
+            anchor = (today.replace(day=1) - timedelta(days=32 * i)).replace(day=1)
+            next_anchor = (anchor + timedelta(days=32)).replace(day=1)
+            revenue = (
+                Payment.objects.filter(
+                    status=Payment.Status.PAID,
+                    created_at__date__gte=anchor,
+                    created_at__date__lt=next_anchor,
+                ).aggregate(total=Sum("amount"))["total"]
+                or 0
+            )
+            growth = Member.objects.filter(
+                created_at__date__gte=anchor, created_at__date__lt=next_anchor
+            ).count()
+            months.append(
+                {
+                    "label": anchor.strftime("%b %Y"),
+                    "revenue": float(revenue),
+                    "new_members": growth,
+                }
+            )
+
+        attendance = []
+        for i in range(6, -1, -1):
+            day = today - timedelta(days=i)
+            attendance.append(
+                {
+                    "label": day.strftime("%a"),
+                    "checkins": AttendanceCheckin.objects.filter(
+                        checked_in_at__date=day
+                    ).count(),
+                }
+            )
+
+        return Response(
+            {
+                "monthly_revenue": months,
+                "attendance_week": attendance,
+                "expired_members_count": Member.objects.filter(
+                    end_date__lt=today,
+                    member_payment_status=RecordedMemberPaymentStatus.PAID,
+                ).count(),
+            }
+        )
+
+
+class GymSettingView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get_object(self):
+        return GymSetting.objects.get_or_create(pk=1)[0]
+
+    def get(self, request):
+        obj = self.get_object()
+        return Response(GymSettingSerializer(obj).data)
+
+    def patch(self, request):
+        obj = self.get_object()
+        ser = GymSettingSerializer(obj, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ser.data)

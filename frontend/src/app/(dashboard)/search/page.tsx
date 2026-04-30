@@ -14,11 +14,14 @@ import {
 
 export default function SearchPage() {
   const [search, setSearch] = useState("");
+  const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<"" | MembershipStatus>("");
   const [plan, setPlan] = useState<"" | MemberPlan>("");
   const [paymentStatus, setPaymentStatus] = useState<
     "" | PaymentStatus | "none"
   >("");
+  const [expiryBefore, setExpiryBefore] = useState("");
+  const [expiryAfter, setExpiryAfter] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,9 +33,12 @@ export default function SearchPage() {
       const data = await apiFetch<Member[]>(
         membersQuery({
           search,
+          phone,
           status: status || undefined,
           plan: plan || undefined,
           payment_status: paymentStatus || undefined,
+          expiry_before: expiryBefore || undefined,
+          expiry_after: expiryAfter || undefined,
         })
       );
       setMembers(data);
@@ -42,7 +48,7 @@ export default function SearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, status, plan, paymentStatus]);
+  }, [search, phone, status, plan, paymentStatus, expiryBefore, expiryAfter]);
 
   useEffect(() => {
     const t = setTimeout(runSearch, 250);
@@ -71,6 +77,15 @@ export default function SearchPage() {
           />
         </div>
         <div>
+          <label className="text-xs text-[var(--muted)]">Phone</label>
+          <input
+            className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+            placeholder="+961..."
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </div>
+        <div>
           <label className="text-xs text-[var(--muted)]">Membership</label>
           <select
             className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 capitalize"
@@ -96,6 +111,9 @@ export default function SearchPage() {
             <option value="monthly">Monthly</option>
             <option value="quarterly">Quarterly</option>
             <option value="yearly">Yearly</option>
+            <option value="student">Student</option>
+            <option value="family">Family</option>
+            <option value="custom">Custom</option>
           </select>
         </div>
         <div>
@@ -114,7 +132,26 @@ export default function SearchPage() {
             <option value="pending">Pending</option>
             <option value="paid">Paid</option>
             <option value="failed">Failed</option>
+            <option value="overdue">Overdue</option>
           </select>
+        </div>
+        <div>
+          <label className="text-xs text-[var(--muted)]">Expiry after</label>
+          <input
+            type="date"
+            className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+            value={expiryAfter}
+            onChange={(e) => setExpiryAfter(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-[var(--muted)]">Expiry before</label>
+          <input
+            type="date"
+            className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+            value={expiryBefore}
+            onChange={(e) => setExpiryBefore(e.target.value)}
+          />
         </div>
         <div className="flex items-end">
           <button

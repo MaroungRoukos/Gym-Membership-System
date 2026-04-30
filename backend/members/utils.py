@@ -11,6 +11,12 @@ def end_date_for_plan(start_date, plan: str):
         return start_date + relativedelta(months=3)
     if plan == Member.Plan.YEARLY:
         return start_date + relativedelta(years=1)
+    if plan == Member.Plan.STUDENT:
+        return start_date + relativedelta(months=1)
+    if plan == Member.Plan.FAMILY:
+        return start_date + relativedelta(months=1)
+    if plan == Member.Plan.CUSTOM:
+        return start_date + relativedelta(months=1)
     raise ValueError(f"Unknown plan: {plan}")
 
 

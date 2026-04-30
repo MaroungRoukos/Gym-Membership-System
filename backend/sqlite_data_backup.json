@@ -1,0 +1,792 @@
+[
+{
+  "model": "auth.permission",
+  "pk": 1,
+  "fields": {
+    "name": "Can add log entry",
+    "content_type": 1,
+    "codename": "add_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 2,
+  "fields": {
+    "name": "Can change log entry",
+    "content_type": 1,
+    "codename": "change_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 3,
+  "fields": {
+    "name": "Can delete log entry",
+    "content_type": 1,
+    "codename": "delete_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 4,
+  "fields": {
+    "name": "Can view log entry",
+    "content_type": 1,
+    "codename": "view_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 5,
+  "fields": {
+    "name": "Can add permission",
+    "content_type": 3,
+    "codename": "add_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 6,
+  "fields": {
+    "name": "Can change permission",
+    "content_type": 3,
+    "codename": "change_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 7,
+  "fields": {
+    "name": "Can delete permission",
+    "content_type": 3,
+    "codename": "delete_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 8,
+  "fields": {
+    "name": "Can view permission",
+    "content_type": 3,
+    "codename": "view_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 9,
+  "fields": {
+    "name": "Can add group",
+    "content_type": 2,
+    "codename": "add_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 10,
+  "fields": {
+    "name": "Can change group",
+    "content_type": 2,
+    "codename": "change_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 11,
+  "fields": {
+    "name": "Can delete group",
+    "content_type": 2,
+    "codename": "delete_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 12,
+  "fields": {
+    "name": "Can view group",
+    "content_type": 2,
+    "codename": "view_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 13,
+  "fields": {
+    "name": "Can add user",
+    "content_type": 4,
+    "codename": "add_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 14,
+  "fields": {
+    "name": "Can change user",
+    "content_type": 4,
+    "codename": "change_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 15,
+  "fields": {
+    "name": "Can delete user",
+    "content_type": 4,
+    "codename": "delete_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 16,
+  "fields": {
+    "name": "Can view user",
+    "content_type": 4,
+    "codename": "view_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 17,
+  "fields": {
+    "name": "Can add content type",
+    "content_type": 5,
+    "codename": "add_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 18,
+  "fields": {
+    "name": "Can change content type",
+    "content_type": 5,
+    "codename": "change_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 19,
+  "fields": {
+    "name": "Can delete content type",
+    "content_type": 5,
+    "codename": "delete_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 20,
+  "fields": {
+    "name": "Can view content type",
+    "content_type": 5,
+    "codename": "view_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 21,
+  "fields": {
+    "name": "Can add session",
+    "content_type": 6,
+    "codename": "add_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 22,
+  "fields": {
+    "name": "Can change session",
+    "content_type": 6,
+    "codename": "change_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 23,
+  "fields": {
+    "name": "Can delete session",
+    "content_type": 6,
+    "codename": "delete_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 24,
+  "fields": {
+    "name": "Can view session",
+    "content_type": 6,
+    "codename": "view_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 25,
+  "fields": {
+    "name": "Can add Blacklisted Token",
+    "content_type": 7,
+    "codename": "add_blacklistedtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 26,
+  "fields": {
+    "name": "Can change Blacklisted Token",
+    "content_type": 7,
+    "codename": "change_blacklistedtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 27,
+  "fields": {
+    "name": "Can delete Blacklisted Token",
+    "content_type": 7,
+    "codename": "delete_blacklistedtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 28,
+  "fields": {
+    "name": "Can view Blacklisted Token",
+    "content_type": 7,
+    "codename": "view_blacklistedtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 29,
+  "fields": {
+    "name": "Can add Outstanding Token",
+    "content_type": 8,
+    "codename": "add_outstandingtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 30,
+  "fields": {
+    "name": "Can change Outstanding Token",
+    "content_type": 8,
+    "codename": "change_outstandingtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 31,
+  "fields": {
+    "name": "Can delete Outstanding Token",
+    "content_type": 8,
+    "codename": "delete_outstandingtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 32,
+  "fields": {
+    "name": "Can view Outstanding Token",
+    "content_type": 8,
+    "codename": "view_outstandingtoken"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 33,
+  "fields": {
+    "name": "Can add member",
+    "content_type": 9,
+    "codename": "add_member"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 34,
+  "fields": {
+    "name": "Can change member",
+    "content_type": 9,
+    "codename": "change_member"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 35,
+  "fields": {
+    "name": "Can delete member",
+    "content_type": 9,
+    "codename": "delete_member"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 36,
+  "fields": {
+    "name": "Can view member",
+    "content_type": 9,
+    "codename": "view_member"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 37,
+  "fields": {
+    "name": "Can add payment",
+    "content_type": 10,
+    "codename": "add_payment"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 38,
+  "fields": {
+    "name": "Can change payment",
+    "content_type": 10,
+    "codename": "change_payment"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 39,
+  "fields": {
+    "name": "Can delete payment",
+    "content_type": 10,
+    "codename": "delete_payment"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 40,
+  "fields": {
+    "name": "Can view payment",
+    "content_type": 10,
+    "codename": "view_payment"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 41,
+  "fields": {
+    "name": "Can add gym setting",
+    "content_type": 12,
+    "codename": "add_gymsetting"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 42,
+  "fields": {
+    "name": "Can change gym setting",
+    "content_type": 12,
+    "codename": "change_gymsetting"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 43,
+  "fields": {
+    "name": "Can delete gym setting",
+    "content_type": 12,
+    "codename": "delete_gymsetting"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 44,
+  "fields": {
+    "name": "Can view gym setting",
+    "content_type": 12,
+    "codename": "view_gymsetting"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 45,
+  "fields": {
+    "name": "Can add attendance checkin",
+    "content_type": 11,
+    "codename": "add_attendancecheckin"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 46,
+  "fields": {
+    "name": "Can change attendance checkin",
+    "content_type": 11,
+    "codename": "change_attendancecheckin"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 47,
+  "fields": {
+    "name": "Can delete attendance checkin",
+    "content_type": 11,
+    "codename": "delete_attendancecheckin"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 48,
+  "fields": {
+    "name": "Can view attendance checkin",
+    "content_type": 11,
+    "codename": "view_attendancecheckin"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 49,
+  "fields": {
+    "name": "Can add member note",
+    "content_type": 13,
+    "codename": "add_membernote"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 50,
+  "fields": {
+    "name": "Can change member note",
+    "content_type": 13,
+    "codename": "change_membernote"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 51,
+  "fields": {
+    "name": "Can delete member note",
+    "content_type": 13,
+    "codename": "delete_membernote"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 52,
+  "fields": {
+    "name": "Can view member note",
+    "content_type": 13,
+    "codename": "view_membernote"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 53,
+  "fields": {
+    "name": "Can add membership history",
+    "content_type": 14,
+    "codename": "add_membershiphistory"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 54,
+  "fields": {
+    "name": "Can change membership history",
+    "content_type": 14,
+    "codename": "change_membershiphistory"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 55,
+  "fields": {
+    "name": "Can delete membership history",
+    "content_type": 14,
+    "codename": "delete_membershiphistory"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 56,
+  "fields": {
+    "name": "Can view membership history",
+    "content_type": 14,
+    "codename": "view_membershiphistory"
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$9EAiH0tnYZYf5tendekrl2$Fv+MZPvydu0+6KwJzzjqkWpxeLi/mInrwxks6rzXjec=",
+    "last_login": null,
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@example.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-04-30T10:13:45.162Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 2,
+  "fields": {
+    "password": "pbkdf2_sha256$1200000$MjsHD7M4f0Zq217kTaLDVL$djCxzmRgqOe/wm0tz/KURtluE8BGki8YIoIJZE2QxEc=",
+    "last_login": "2026-04-30T10:21:38.242Z",
+    "is_superuser": true,
+    "username": "mario",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-04-30T10:19:23.110Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 1,
+  "fields": {
+    "app_label": "admin",
+    "model": "logentry"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 2,
+  "fields": {
+    "app_label": "auth",
+    "model": "group"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 3,
+  "fields": {
+    "app_label": "auth",
+    "model": "permission"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 4,
+  "fields": {
+    "app_label": "auth",
+    "model": "user"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 5,
+  "fields": {
+    "app_label": "contenttypes",
+    "model": "contenttype"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 6,
+  "fields": {
+    "app_label": "sessions",
+    "model": "session"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 7,
+  "fields": {
+    "app_label": "token_blacklist",
+    "model": "blacklistedtoken"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 8,
+  "fields": {
+    "app_label": "token_blacklist",
+    "model": "outstandingtoken"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 9,
+  "fields": {
+    "app_label": "members",
+    "model": "member"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 10,
+  "fields": {
+    "app_label": "members",
+    "model": "payment"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 11,
+  "fields": {
+    "app_label": "members",
+    "model": "attendancecheckin"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 12,
+  "fields": {
+    "app_label": "members",
+    "model": "gymsetting"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 13,
+  "fields": {
+    "app_label": "members",
+    "model": "membernote"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 14,
+  "fields": {
+    "app_label": "members",
+    "model": "membershiphistory"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "7lxcgyvrrii2ak85gg1l5ar1s1srgcyq",
+  "fields": {
+    "session_data": ".eJxVjMsOwiAQRf-FtSG8B1y69xsIHQapGkhKuzL-uzbpQrf3nHNfLKZtrXEbtMQ5szNT7PS7TQkf1HaQ76ndOsfe1mWe-K7wgw5-7Zmel8P9O6hp1G9tLBhPpWhtgWTKAdELJaQojlyRpgQniIJEDYDOGwjBOshaGUUekmDvD9D6NwU:1wIOWY:tK645qr4d3ef-AgEBwxi1iwGDpJ4sj1pFXsj0yymL48",
+    "expire_date": "2026-05-14T10:21:38.256Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 1,
+  "fields": {
+    "user": 1,
+    "jti": "c1a10442a21d454aaf70ead4b6269fa0",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE0OTA5OSwiaWF0IjoxNzc3NTQ0Mjk5LCJqdGkiOiJjMWExMDQ0MmEyMWQ0NTRhYWY3MGVhZDRiNjI2OWZhMCIsInVzZXJfaWQiOiIxIn0.16s-uajvBWafqltzbRm7PQByUz2f9tjNXt_MK8l07Ok",
+    "created_at": "2026-04-30T10:18:19.495Z",
+    "expires_at": "2026-05-07T10:18:19Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 2,
+  "fields": {
+    "user": 1,
+    "jti": "74d4732438ee454cb8759ccc0ae74272",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MDYwMiwiaWF0IjoxNzc3NTQ1ODAyLCJqdGkiOiI3NGQ0NzMyNDM4ZWU0NTRjYjg3NTljY2MwYWU3NDI3MiIsInVzZXJfaWQiOiIxIn0.Af_Qs9Y1_P7Kt6zCK4w2cKJWG-UdimRw5fSqyNdYojo",
+    "created_at": "2026-04-30T10:43:22.243Z",
+    "expires_at": "2026-05-07T10:43:22Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 3,
+  "fields": {
+    "user": 1,
+    "jti": "7923b2cf17174cf694488943d3c96331",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MDY0MSwiaWF0IjoxNzc3NTQ1ODQxLCJqdGkiOiI3OTIzYjJjZjE3MTc0Y2Y2OTQ0ODg5NDNkM2M5NjMzMSIsInVzZXJfaWQiOiIxIn0.nDY76IGIB1YtoS0q7dvAq-b2RS4HYI-DU9NvCnUw1pI",
+    "created_at": "2026-04-30T10:44:01.777Z",
+    "expires_at": "2026-05-07T10:44:01Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 4,
+  "fields": {
+    "user": 1,
+    "jti": "95d9928cd32b409dbd3ac4f0e2666090",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjc3NywiaWF0IjoxNzc3NTQ3OTc3LCJqdGkiOiI5NWQ5OTI4Y2QzMmI0MDlkYmQzYWM0ZjBlMjY2NjA5MCIsInVzZXJfaWQiOiIxIn0._zJpG_GjyBH_ZfjX87fR0VBYnF_dHU4EWrMAt5NwKPw",
+    "created_at": "2026-04-30T11:19:37.663Z",
+    "expires_at": "2026-05-07T11:19:37Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 5,
+  "fields": {
+    "user": 1,
+    "jti": "8604f553de0a49afa92a48499ddc609b",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjc5MiwiaWF0IjoxNzc3NTQ3OTkyLCJqdGkiOiI4NjA0ZjU1M2RlMGE0OWFmYTkyYTQ4NDk5ZGRjNjA5YiIsInVzZXJfaWQiOiIxIn0.jbvKa3j0Rok5ryEtFLm7MFEj6VQ9zFqM6sn9qW8b4no",
+    "created_at": "2026-04-30T11:19:52.330Z",
+    "expires_at": "2026-05-07T11:19:52Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 6,
+  "fields": {
+    "user": 1,
+    "jti": "e3dc01be6c394632aaf406d41dae8538",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjg4NiwiaWF0IjoxNzc3NTQ4MDg2LCJqdGkiOiJlM2RjMDFiZTZjMzk0NjMyYWFmNDA2ZDQxZGFlODUzOCIsInVzZXJfaWQiOiIxIn0.1KQrlkIzPy1ikZN_Qr7a4l9cbkesH_JDfh0jkF91Bj4",
+    "created_at": "2026-04-30T11:21:26.407Z",
+    "expires_at": "2026-05-07T11:21:26Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 7,
+  "fields": {
+    "user": 1,
+    "jti": "8de94352eb06470ab53c01d5a62e576c",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MjkwNCwiaWF0IjoxNzc3NTQ4MTA0LCJqdGkiOiI4ZGU5NDM1MmViMDY0NzBhYjUzYzAxZDVhNjJlNTc2YyIsInVzZXJfaWQiOiIxIn0.8mhwRXHq0M9CMyiXIX0s-LZeiB2SJDBmiG4CMoWCQTE",
+    "created_at": "2026-04-30T11:21:44.811Z",
+    "expires_at": "2026-05-07T11:21:44Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 8,
+  "fields": {
+    "user": 1,
+    "jti": "82a526fbb2b1483d90df88078621c6d0",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1Mjk1NCwiaWF0IjoxNzc3NTQ4MTU0LCJqdGkiOiI4MmE1MjZmYmIyYjE0ODNkOTBkZjg4MDc4NjIxYzZkMCIsInVzZXJfaWQiOiIxIn0.pjFQCc-cr6eZ6RsxVxBG8CNApxpbFLEBHYuigbdiCG4",
+    "created_at": "2026-04-30T11:22:34.692Z",
+    "expires_at": "2026-05-07T11:22:34Z"
+  }
+},
+{
+  "model": "token_blacklist.outstandingtoken",
+  "pk": 9,
+  "fields": {
+    "user": 1,
+    "jti": "b0624c46b0f14469b6be0616d79d3c8f",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3ODE1MzIwOSwiaWF0IjoxNzc3NTQ4NDA5LCJqdGkiOiJiMDYyNGM0NmIwZjE0NDY5YjZiZTA2MTZkNzlkM2M4ZiIsInVzZXJfaWQiOiIxIn0.hUpiWFVef5iHGQ46ahEI1TKMh9uQOUGYwWVf6kuJSAU",
+    "created_at": "2026-04-30T11:26:49.850Z",
+    "expires_at": "2026-05-07T11:26:49Z"
+  }
+},
+{
+  "model": "members.member",
+  "pk": 1,
+  "fields": {
+    "id_number": "M000001",
+    "first_name": "Mario",
+    "last_name": "Massoud",
+    "email": "marioo.massoud@gmail.com",
+    "phone": "+96176561550",
+    "plan": "monthly",
+    "custom_plan_name": "",
+    "discount_percent": "0.00",
+    "member_payment_status": "paid",
+    "payment_received_on": "2026-04-30",
+    "start_date": "2026-04-30",
+    "end_date": "2026-05-30",
+    "created_at": "2026-04-30T10:48:57.382Z",
+    "updated_at": "2026-04-30T10:56:03.091Z"
+  }
+},
+{
+  "model": "members.gymsetting",
+  "pk": 1,
+  "fields": {
+    "gym_name": "Gym Admin",
+    "logo_url": "",
+    "currency": "USD",
+    "admin_display_name": "",
+    "updated_at": "2026-04-30T11:19:52.494Z"
+  }
+}
+]

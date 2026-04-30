@@ -23,6 +23,9 @@ const PLANS: { value: MemberPlan; label: string }[] = [
   { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
   { value: "yearly", label: "Yearly" },
+  { value: "student", label: "Student" },
+  { value: "family", label: "Family" },
+  { value: "custom", label: "Custom" },
 ];
 
 export default function EditMemberPage() {
@@ -36,6 +39,8 @@ export default function EditMemberPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [plan, setPlan] = useState<MemberPlan>("monthly");
+  const [customPlanName, setCustomPlanName] = useState("");
+  const [discountPercent, setDiscountPercent] = useState("0");
   const [paymentOption, setPaymentOption] = useState<"paid" | "unpaid">("unpaid");
   const [start_date, setStartDate] = useState("");
   const [useCustomEnd, setUseCustomEnd] = useState(false);
@@ -67,6 +72,8 @@ export default function EditMemberPage() {
         setEmail(m.email);
         setPhone(m.phone);
         setPlan(m.plan);
+        setCustomPlanName(m.custom_plan_name ?? "");
+        setDiscountPercent(m.discount_percent ?? "0");
         setPaymentOption(m.member_payment_status === "paid" ? "paid" : "unpaid");
         setStartDate(m.start_date);
         setEndDate(m.end_date);
@@ -101,6 +108,8 @@ export default function EditMemberPage() {
       email,
       phone: normalizeLbPhone(phone),
       plan,
+      custom_plan_name: plan === "custom" ? customPlanName.trim() : "",
+      discount_percent: discountPercent || "0",
       start_date,
       member_payment_status: paymentOption === "paid" ? "paid" : "pending",
     };
@@ -204,6 +213,27 @@ export default function EditMemberPage() {
               </option>
             ))}
           </select>
+        </Field>
+        {plan === "custom" && (
+          <Field label="Custom plan name" required>
+            <input
+              required
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+              value={customPlanName}
+              onChange={(e) => setCustomPlanName(e.target.value)}
+            />
+          </Field>
+        )}
+        <Field label="Discount (%)">
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+            value={discountPercent}
+            onChange={(e) => setDiscountPercent(e.target.value)}
+          />
         </Field>
         <div className="space-y-3">
           <div>

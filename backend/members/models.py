@@ -13,6 +13,9 @@ class Member(models.Model):
         MONTHLY = "monthly", "Monthly"
         QUARTERLY = "quarterly", "Quarterly"
         YEARLY = "yearly", "Yearly"
+        STUDENT = "student", "Student"
+        FAMILY = "family", "Family"
+        CUSTOM = "custom", "Custom"
 
     id_number = models.CharField(
         max_length=64,
@@ -27,10 +30,13 @@ class Member(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(
         max_length=16,
+        db_index=True,
         blank=True,
         help_text="Lebanon E.164: +961 and 8 digits, e.g. +96131234567",
     )
     plan = models.CharField(max_length=20, choices=Plan.choices)
+    custom_plan_name = models.CharField(max_length=120, blank=True, default="")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     member_payment_status = models.CharField(
         max_length=20,
         choices=RecordedMemberPaymentStatus.choices,
@@ -45,7 +51,7 @@ class Member(models.Model):
         help_text="Date payment was received. Can differ from membership start (e.g. pay today, start next week).",
     )
     start_date = models.DateField()
-    end_date = models.DateField()
+    end_date = models.DateField(db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -80,6 +86,13 @@ class Payment(models.Model):
         PENDING = "pending", "Pending"
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
+        OVERDUE = "overdue", "Overdue"
+
+    class Method(models.TextChoices):
+        CASH = "cash", "Cash"
+        CARD = "card", "Card"
+        TRANSFER = "transfer", "Bank transfer"
+        ONLINE = "online", "Online"
 
     member = models.ForeignKey(
         Member,
@@ -91,7 +104,15 @@ class Payment(models.Model):
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
+        db_index=True,
     )
+    method = models.CharField(
+        max_length=20,
+        choices=Method.choices,
+        default=Method.CASH,
+    )
+    due_date = models.DateField(null=True, blank=True, db_index=True)
+    invoice_number = models.CharField(max_length=64, blank=True, default="")
     description = models.CharField(max_length=255, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -102,3 +123,74 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.member_id} {self.amount} {self.status}"
+
+
+class MemberNote(models.Model):
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name="notes",
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class MembershipHistory(models.Model):
+    class Event(models.TextChoices):
+        CREATED = "created", "Created"
+        UPDATED = "updated", "Updated"
+        ASSIGNED = "assigned", "Assigned"
+        RENEWED = "renewed", "Renewed"
+
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name="membership_history",
+    )
+    event = models.CharField(max_length=20, choices=Event.choices, default=Event.UPDATED)
+    plan = models.CharField(max_length=20, choices=Member.Plan.choices)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    payment_status = models.CharField(
+        max_length=20,
+        choices=RecordedMemberPaymentStatus.choices,
+        default=RecordedMemberPaymentStatus.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class AttendanceCheckin(models.Model):
+    class Source(models.TextChoices):
+        DESK = "desk", "Front desk"
+        STAFF = "staff", "Staff"
+        SELF = "self", "Self-service"
+
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name="checkins",
+    )
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.DESK)
+    checked_in_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-checked_in_at"]
+
+
+class GymSetting(models.Model):
+    gym_name = models.CharField(max_length=120, default="Gym Admin")
+    logo_url = models.URLField(blank=True)
+    currency = models.CharField(max_length=8, default="USD")
+    admin_display_name = models.CharField(max_length=100, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)

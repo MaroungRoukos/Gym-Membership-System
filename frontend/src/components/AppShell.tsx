@@ -9,8 +9,11 @@ const links = [
   { href: "/members", label: "Members" },
   { href: "/membership", label: "Membership" },
   { href: "/payments", label: "Payments" },
+  { href: "/checkins", label: "Check-ins" },
+  { href: "/reports", label: "Reports" },
   { href: "/search", label: "Search & filter" },
   { href: "/expiring", label: "Expiring" },
+  { href: "/settings", label: "Settings" },
 ];
 
 function isActivePath(pathname: string, href: string) {

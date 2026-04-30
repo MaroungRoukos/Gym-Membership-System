@@ -17,6 +17,9 @@ const PLANS: { value: MemberPlan; label: string }[] = [
   { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
   { value: "yearly", label: "Yearly" },
+  { value: "student", label: "Student" },
+  { value: "family", label: "Family" },
+  { value: "custom", label: "Custom" },
 ];
 
 export default function MembershipPage() {

@@ -25,8 +25,8 @@ class Member(models.Model):
         null=True,
         help_text="Set automatically as M + zero-padded primary key (e.g. M000042).",
     )
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100, blank=True, default="")
+    first_name = models.CharField(max_length=100, db_index=True)
+    last_name = models.CharField(max_length=100, blank=True, default="", db_index=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(
         max_length=16,
@@ -53,7 +53,7 @@ class Member(models.Model):
     start_date = models.DateField()
     end_date = models.DateField(db_index=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -115,11 +115,15 @@ class Payment(models.Model):
     invoice_number = models.CharField(max_length=64, blank=True, default="")
     description = models.CharField(max_length=255, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["member", "status"]),
+            models.Index(fields=["member", "due_date"]),
+        ]
 
     def __str__(self):
         return f"{self.member_id} {self.amount} {self.status}"
@@ -182,6 +186,9 @@ class AttendanceCheckin(models.Model):
 
     class Meta:
         ordering = ["-checked_in_at"]
+        indexes = [
+            models.Index(fields=["member", "checked_in_at"]),
+        ]
 
 
 class GymSetting(models.Model):

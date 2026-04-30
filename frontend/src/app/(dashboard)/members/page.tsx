@@ -5,6 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHero } from "@/components/PageHero";
+import { PaginationControls, parseOffset, parsePageSize } from "@/components/PaginationControls";
+import { StatusBadge } from "@/components/StatusBadge";
 import {
   apiFetch,
   deleteMember,
@@ -12,19 +16,6 @@ import {
   type PaginatedResponse,
   type Member,
 } from "@/lib/api";
-
-const PAGE_SIZES = [10, 20, 50, 100] as const;
-
-function parsePageSize(raw: string | null): number {
-  const value = Number(raw);
-  return PAGE_SIZES.includes(value as (typeof PAGE_SIZES)[number]) ? value : 20;
-}
-
-function parseOffset(raw: string | null): number {
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return Math.floor(value);
-}
 
 export default function MembersPage() {
   const router = useRouter();
@@ -41,6 +32,8 @@ export default function MembersPage() {
   const [sortBy, setSortBy] = useState<"name" | "end_date">(() =>
     searchParams.get("ordering") === "end_date" ? "end_date" : "name"
   );
+  const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("search") || "");
   const [totalCount, setTotalCount] = useState(0);
 
   const load = useCallback(async () => {
@@ -50,6 +43,7 @@ export default function MembersPage() {
       const ordering = sortBy === "name" ? "first_name" : "end_date";
       const data = await apiFetch<PaginatedResponse<Member>>(
         membersQuery({
+          search: debouncedSearch || undefined,
           limit,
           offset,
           ordering,
@@ -64,7 +58,14 @@ export default function MembersPage() {
     } finally {
       setLoading(false);
     }
-  }, [limit, offset, sortBy]);
+  }, [debouncedSearch, limit, offset, sortBy]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const ordering = sortBy === "name" ? "first_name" : "end_date";
@@ -72,11 +73,13 @@ export default function MembersPage() {
     params.set("limit", String(limit));
     params.set("offset", String(offset));
     params.set("ordering", ordering);
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    else params.delete("search");
     const next = params.toString();
     if (next !== searchParams.toString()) {
       router.replace(`${pathname}?${next}`, { scroll: false });
     }
-  }, [limit, offset, pathname, router, searchParams, sortBy]);
+  }, [debouncedSearch, limit, offset, pathname, router, searchParams, sortBy]);
 
   useEffect(() => {
     load();
@@ -104,61 +107,40 @@ export default function MembersPage() {
       setDeleteLoading(false);
     }
   }
-  const page = Math.floor(offset / limit) + 1;
-  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
-  const start = totalCount === 0 ? 0 : offset + 1;
-  const end = totalCount === 0 ? 0 : Math.min(offset + limit, totalCount);
-  const disablePrev = loading || offset === 0;
-  const disableNext = loading || offset + limit >= totalCount;
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Members</h1>
-          <p className="text-sm text-[var(--muted)]">
-            All members — use Search &amp; filter for advanced filters.
-          </p>
+      <PageHero
+        eyebrow="Member Management"
+        title="Build and retain a stronger gym community."
+        description="Review members, monitor plan expirations, and manage member lifecycle with a modern fitness-focused workflow."
+        imageSrc="/images/gym-members.jpg"
+        actions={[{ href: "/members/new", label: "Add member" }]}
+      />
+      <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-3 md:items-end">
+        <div className="md:col-span-2">
+          <label className="text-xs text-[var(--muted)]">Search members</label>
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setOffset(0);
+            }}
+            placeholder="Find by name, ID, or phone"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+          />
         </div>
-        <Link
-          href="/members/new"
-          className="inline-flex justify-center rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
-        >
-          Add member
-        </Link>
-      </div>
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--muted)]">
-          Showing {start}-{end} of {totalCount} members
-        </p>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-[var(--muted)]">
-            Page size
-            <select
-              className="ml-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs"
-              value={limit}
-              onChange={(e) => {
-                setLimit(Number(e.target.value));
-                setOffset(0);
-              }}
-            >
-              {PAGE_SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div>
+          <label className="text-xs text-[var(--muted)]">Sort</label>
           <select
-            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm"
             value={sortBy}
             onChange={(e) => {
               setSortBy(e.target.value as "name" | "end_date");
               setOffset(0);
             }}
           >
-            <option value="name">Sort by name</option>
-            <option value="end_date">Sort by end date</option>
+            <option value="name">Name (A-Z)</option>
+            <option value="end_date">End date (soonest)</option>
           </select>
         </div>
       </div>
@@ -189,9 +171,9 @@ export default function MembersPage() {
       {loading ? (
         <p className="text-[var(--muted)]">Loading…</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/40">
           <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-[var(--surface)] text-[var(--muted)]">
+            <thead className="bg-white/5 text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-3">ID #</th>
                 <th className="px-4 py-3">Name</th>
@@ -207,9 +189,13 @@ export default function MembersPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-[var(--muted)]"
+                    className="px-4 py-8"
                   >
-                    No members yet.
+                    <EmptyState
+                      title="No members found"
+                      message="Try changing your search or filters, then hit the floor with new signups."
+                      imageSrc="/images/gym-members.jpg"
+                    />
                   </td>
                 </tr>
               ) : (
@@ -217,7 +203,7 @@ export default function MembersPage() {
                   <tr
                     key={m.id}
                     onClick={() => router.push(`/members/${m.id}`)}
-                    className="cursor-pointer border-t border-[var(--border)] hover:bg-[var(--surface)]/40"
+                    className="cursor-pointer border-t border-white/10 hover:bg-white/[0.03]"
                   >
                     <td className="px-4 py-3 font-mono text-xs">
                       {m.id_number}
@@ -226,21 +212,16 @@ export default function MembersPage() {
                     <td className="px-4 py-3 capitalize">{m.plan}</td>
                     <td className="px-4 py-3">{m.end_date}</td>
                     <td className="px-4 py-3 capitalize">
-                      <span
-                        className={
-                          m.membership_status === "active"
-                            ? "text-[var(--success)]"
-                            : "text-[var(--muted)]"
-                        }
-                      >
-                        {m.membership_status.replace("_", " ")}
-                      </span>
+                      <StatusBadge
+                        label={m.membership_status.replace("_", " ")}
+                        tone={m.membership_status === "active" ? "success" : "warning"}
+                      />
                     </td>
                     <td className="px-4 py-3 capitalize text-xs">
                       {m.member_payment_status === "paid" ? (
-                        <span className="text-[var(--success)]">Paid</span>
+                        <StatusBadge label="Paid" tone="success" />
                       ) : (
-                        <span className="text-amber-400/90">Pending</span>
+                        <StatusBadge label="Pending" tone="warning" />
                       )}
                     </td>
                     <td
@@ -273,27 +254,18 @@ export default function MembersPage() {
           </table>
         </div>
       )}
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          disabled={disablePrev}
-          onClick={() => setOffset((prev) => Math.max(0, prev - limit))}
-          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <span className="text-xs text-[var(--muted)]">
-          Page {page} / {totalPages}
-        </span>
-        <button
-          type="button"
-          disabled={disableNext}
-          onClick={() => setOffset((prev) => prev + limit)}
-          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+      <PaginationControls
+        noun="members"
+        count={totalCount}
+        limit={limit}
+        offset={offset}
+        loading={loading}
+        onLimitChange={(value) => {
+          setLimit(value);
+          setOffset(0);
+        }}
+        onOffsetChange={setOffset}
+      />
     </div>
   );
 }

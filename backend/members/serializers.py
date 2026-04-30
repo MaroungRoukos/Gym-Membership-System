@@ -61,6 +61,8 @@ class MemberSerializer(serializers.ModelSerializer):
         )
 
     def get_full_name(self, obj):
+        if hasattr(obj, "full_name_text"):
+            return obj.full_name_text
         return f"{obj.first_name} {obj.last_name}".strip()
 
     def get_membership_status(self, obj):
@@ -220,6 +222,8 @@ class PaymentSerializer(serializers.ModelSerializer):
         read_only_fields = ("created_at", "updated_at", "paid_at")
 
     def get_member_name(self, obj):
+        if hasattr(obj, "member_name"):
+            return obj.member_name
         return obj.member.display_name()
 
 
@@ -296,6 +300,8 @@ class AttendanceCheckinSerializer(serializers.ModelSerializer):
         read_only_fields = ("checked_in_at",)
 
     def get_member_name(self, obj):
+        if hasattr(obj, "member_name"):
+            return obj.member_name
         return obj.member.display_name()
 
 

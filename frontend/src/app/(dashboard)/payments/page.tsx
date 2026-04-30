@@ -4,6 +4,10 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHero } from "@/components/PageHero";
+import { PaginationControls, parseOffset, parsePageSize } from "@/components/PaginationControls";
+import { StatusBadge } from "@/components/StatusBadge";
 import {
   apiFetch,
   createPayment,
@@ -15,19 +19,6 @@ import {
   type Payment,
   type PaymentStatus,
 } from "@/lib/api";
-
-const PAGE_SIZES = [10, 20, 50, 100] as const;
-
-function parsePageSize(raw: string | null): number {
-  const value = Number(raw);
-  return PAGE_SIZES.includes(value as (typeof PAGE_SIZES)[number]) ? value : 20;
-}
-
-function parseOffset(raw: string | null): number {
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return Math.floor(value);
-}
 
 function parseFilterMember(raw: string | null): number | "" {
   if (!raw) return "";
@@ -78,34 +69,35 @@ export default function PaymentsPage() {
     parseSortBy(searchParams.get("ordering"))
   );
 
-  const load = useCallback(async () => {
+  const loadMembers = useCallback(async () => {
+    const mData = await apiFetch<Member[]>(membersQuery({}));
+    setMembers(mData);
+    setMemberId((prev) => {
+      if (
+        typeof prev === "number" &&
+        mData.some((m) => m.id === prev)
+      ) {
+        return prev;
+      }
+      return mData.length ? mData[0].id : "";
+    });
+  }, []);
+
+  const loadPayments = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const ordering =
         sortBy === "created_at" ? "-created_at" : sortBy;
-      const [mData, pData] = await Promise.all([
-        apiFetch<Member[]>(membersQuery({})),
-        fetchPaymentsPage({
-          member: filterMember || undefined,
-          status: filterStatus || undefined,
-          limit,
-          offset,
-          ordering,
-        }),
-      ]);
-      setMembers(mData);
+      const pData = await fetchPaymentsPage({
+        member: filterMember || undefined,
+        status: filterStatus || undefined,
+        limit,
+        offset,
+        ordering,
+      });
       setPayments(pData.results);
       setTotalCount(pData.count);
-      setMemberId((prev) => {
-        if (
-          typeof prev === "number" &&
-          mData.some((m) => m.id === prev)
-        ) {
-          return prev;
-        }
-        return mData.length ? mData[0].id : "";
-      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
       setPayments([]);
@@ -141,8 +133,12 @@ export default function PaymentsPage() {
   ]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadPayments();
+  }, [loadPayments]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   useEffect(() => {
     if (totalCount > 0 && offset >= totalCount) {
@@ -173,7 +169,7 @@ export default function PaymentsPage() {
       setDueDate("");
       setInvoiceNumber("");
       setSuccess("Payment recorded.");
-      await load();
+      await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to record");
     } finally {
@@ -184,27 +180,19 @@ export default function PaymentsPage() {
   async function patchPayment(id: number, next: PaymentStatus) {
     try {
       await updatePayment(id, { status: next });
-      await load();
+      await loadPayments();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Update failed");
     }
   }
-  const page = Math.floor(offset / limit) + 1;
-  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
-  const start = totalCount === 0 ? 0 : offset + 1;
-  const end = totalCount === 0 ? 0 : Math.min(offset + limit, totalCount);
-  const disablePrev = loading || offset === 0;
-  const disableNext = loading || offset + limit >= totalCount;
-
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Payments</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Record payments and view history. Mark as paid to count toward
-          revenue.
-        </p>
-      </div>
+      <PageHero
+        eyebrow="Revenue Control"
+        title="Premium payment operations for your gym."
+        description="Track dues, update payment statuses instantly, and keep your membership cash flow healthy."
+        imageSrc="/images/gym-payments.jpg"
+      />
 
       {error && <Alert type="error">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
@@ -212,7 +200,7 @@ export default function PaymentsPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <form
           onSubmit={onRecord}
-          className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6"
+          className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur"
         >
           <h2 className="font-medium">Record payment</h2>
           <div>
@@ -303,13 +291,13 @@ export default function PaymentsPage() {
           </button>
         </form>
 
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
           <h2 className="font-medium">Filter history</h2>
           <div className="mt-4 space-y-3">
             <div>
               <label className="text-xs text-[var(--muted)]">Member</label>
               <select
-                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2"
                 value={filterMember === "" ? "" : filterMember}
                 onChange={(e) => {
                   setFilterMember(e.target.value ? Number(e.target.value) : "");
@@ -327,7 +315,7 @@ export default function PaymentsPage() {
             <div>
               <label className="text-xs text-[var(--muted)]">Status</label>
               <select
-                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 capitalize"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 capitalize"
                 value={filterStatus}
                 onChange={(e) => {
                   setFilterStatus(
@@ -344,26 +332,9 @@ export default function PaymentsPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-[var(--muted)]">Page size</label>
-              <select
-                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
-                value={limit}
-                onChange={(e) => {
-                  setLimit(Number(e.target.value));
-                  setOffset(0);
-                }}
-              >
-                {PAGE_SIZES.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="text-xs text-[var(--muted)]">Sort</label>
               <select
-                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2"
                 value={sortBy}
                 onChange={(e) =>
                   setSortBy(
@@ -383,9 +354,9 @@ export default function PaymentsPage() {
       {loading ? (
         <p className="text-[var(--muted)]">Loading payments…</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/40">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-[var(--surface)] text-[var(--muted)]">
+            <thead className="bg-white/5 text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-2">When</th>
                 <th className="px-4 py-2">Member</th>
@@ -401,14 +372,18 @@ export default function PaymentsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-[var(--muted)]"
+                    className="px-4 py-8"
                   >
-                    No payments match.
+                    <EmptyState
+                      title="No payments in this view"
+                      message="Adjust filters or record a new payment to populate this feed."
+                      imageSrc="/images/gym-payments.jpg"
+                    />
                   </td>
                 </tr>
               ) : (
                 payments.map((p) => (
-                  <tr key={p.id} className="border-t border-[var(--border)]">
+                  <tr key={p.id} className="border-t border-white/10 hover:bg-white/[0.03]">
                     <td className="px-4 py-2 text-xs">
                       {new Date(p.created_at).toLocaleString()}
                     </td>
@@ -424,7 +399,18 @@ export default function PaymentsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2 tabular-nums">${p.amount}</td>
-                    <td className="px-4 py-2 capitalize">{p.status}</td>
+                    <td className="px-4 py-2">
+                      <StatusBadge
+                        label={p.status}
+                        tone={
+                          p.status === "paid"
+                            ? "success"
+                            : p.status === "failed"
+                              ? "danger"
+                              : "warning"
+                        }
+                      />
+                    </td>
                     <td className="px-4 py-2 capitalize">{p.method}</td>
                     <td className="px-4 py-2">{p.due_date ?? "—"}</td>
                     <td className="px-4 py-2 space-x-2 text-xs">
@@ -463,30 +449,18 @@ export default function PaymentsPage() {
           </table>
         </div>
       )}
-      <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-[var(--muted)]">
-          Showing {start}-{end} of {totalCount} records
-        </span>
-        <button
-          type="button"
-          disabled={disablePrev}
-          onClick={() => setOffset((prev) => Math.max(0, prev - limit))}
-          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <span className="text-xs text-[var(--muted)]">
-          Page {page} / {totalPages} ({totalCount} records)
-        </span>
-        <button
-          type="button"
-          disabled={disableNext}
-          onClick={() => setOffset((prev) => prev + limit)}
-          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+      <PaginationControls
+        noun="records"
+        count={totalCount}
+        limit={limit}
+        offset={offset}
+        loading={loading}
+        onLimitChange={(value) => {
+          setLimit(value);
+          setOffset(0);
+        }}
+        onOffsetChange={setOffset}
+      />
     </div>
   );
 }

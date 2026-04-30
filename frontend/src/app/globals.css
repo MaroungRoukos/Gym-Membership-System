@@ -1,25 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090d16;
-  --foreground: #eef3ff;
-  --surface: #121a2a;
-  --surface-soft: #19243a;
-  --border: #2b3b59;
-  --accent: #4f9cff;
-  --accent-hover: #3c83e0;
+  --background: #05070f;
+  --foreground: #eef4ff;
+  --surface: #0f1729;
+  --surface-soft: #13203a;
+  --border: #27436f;
+  --accent: #16b9ff;
+  --accent-hover: #0a9bdb;
   --success: #34d399;
-  --danger: #f87171;
-  --muted: #9fb1cc;
+  --danger: #fb7185;
+  --muted: #9ab0ce;
 }
 
 body {
   color: var(--foreground);
   background:
-    radial-gradient(1200px 800px at 20% -10%, #203765 0%, transparent 60%),
-    radial-gradient(1000px 700px at 100% 0%, #2c1f47 0%, transparent 55%),
+    radial-gradient(1000px 700px at 20% -10%, #12346f 0%, transparent 60%),
+    radial-gradient(1200px 900px at 100% 0%, #11304f 0%, transparent 58%),
+    radial-gradient(800px 600px at 60% 100%, #1f2a44 0%, transparent 50%),
     var(--background);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    sans-serif;
 }
 
 ::selection {

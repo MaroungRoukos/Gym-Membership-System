@@ -1,6 +1,7 @@
 from datetime import timedelta
 
-from django.db.models import Count, OuterRef, Q, Subquery, Sum
+from django.db.models import CharField, Count, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Concat
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -49,6 +50,12 @@ def _annotate_member_payment_fields(qs):
     return qs.annotate(
         latest_payment_status=Subquery(latest_sq),
         _payment_count=Count("payments"),
+        full_name_text=Concat(
+            "first_name",
+            Value(" "),
+            "last_name",
+            output_field=CharField(),
+        ),
     )
 
 
@@ -123,7 +130,23 @@ class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
         return MemberSerializer
 
     def get_queryset(self):
-        qs = Member.objects.all()
+        qs = Member.objects.only(
+            "id",
+            "id_number",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "plan",
+            "custom_plan_name",
+            "discount_percent",
+            "member_payment_status",
+            "payment_received_on",
+            "start_date",
+            "end_date",
+            "created_at",
+            "updated_at",
+        )
         qs = _annotate_member_payment_fields(qs)
 
         search = (self.request.query_params.get("search") or "").strip()
@@ -246,7 +269,34 @@ class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
 class PaymentViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
     """Record and list payments (admin only)."""
 
-    queryset = Payment.objects.select_related("member").all()
+    queryset = (
+        Payment.objects.select_related("member")
+        .only(
+            "id",
+            "member_id",
+            "amount",
+            "status",
+            "method",
+            "due_date",
+            "invoice_number",
+            "description",
+            "paid_at",
+            "created_at",
+            "updated_at",
+            "member__id",
+            "member__id_number",
+            "member__first_name",
+            "member__last_name",
+        )
+        .annotate(
+            member_name=Concat(
+                "member__first_name",
+                Value(" "),
+                "member__last_name",
+                output_field=CharField(),
+            )
+        )
+    )
     permission_classes = [IsAdminUser]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
@@ -298,12 +348,7 @@ class MemberNoteViewSet(viewsets.ModelViewSet):
         member_id = self.request.query_params.get("member")
         if member_id:
             qs = qs.filter(member_id=member_id)
-        return _apply_ordering(
-            qs,
-            self.request.query_params.get("ordering"),
-            {"checked_in_at"},
-            ("-checked_in_at",),
-        )
+        return qs
 
 
 class MembershipHistoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -320,7 +365,27 @@ class MembershipHistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class AttendanceCheckinViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
-    queryset = AttendanceCheckin.objects.select_related("member").all()
+    queryset = (
+        AttendanceCheckin.objects.select_related("member")
+        .only(
+            "id",
+            "member_id",
+            "source",
+            "checked_in_at",
+            "member__id",
+            "member__id_number",
+            "member__first_name",
+            "member__last_name",
+        )
+        .annotate(
+            member_name=Concat(
+                "member__first_name",
+                Value(" "),
+                "member__last_name",
+                output_field=CharField(),
+            )
+        )
+    )
     serializer_class = AttendanceCheckinSerializer
     permission_classes = [IsAdminUser]
     http_method_names = ["get", "post", "head", "options"]
@@ -330,7 +395,12 @@ class AttendanceCheckinViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
         member_id = self.request.query_params.get("member")
         if member_id:
             qs = qs.filter(member_id=member_id)
-        return qs
+        return _apply_ordering(
+            qs,
+            self.request.query_params.get("ordering"),
+            {"checked_in_at"},
+            ("-checked_in_at",),
+        )
 
     @action(detail=False, methods=["post"], url_path="quick")
     def quick(self, request):

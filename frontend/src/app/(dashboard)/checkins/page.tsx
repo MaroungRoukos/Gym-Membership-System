@@ -3,20 +3,11 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
+import { EmptyState } from "@/components/EmptyState";
+import { PageHero } from "@/components/PageHero";
+import { PaginationControls, parseOffset, parsePageSize } from "@/components/PaginationControls";
+import { StatusBadge } from "@/components/StatusBadge";
 import { fetchCheckinsPage, quickCheckin, type Checkin } from "@/lib/api";
-
-const PAGE_SIZES = [10, 20, 50, 100] as const;
-
-function parsePageSize(raw: string | null): number {
-  const value = Number(raw);
-  return PAGE_SIZES.includes(value as (typeof PAGE_SIZES)[number]) ? value : 20;
-}
-
-function parseOffset(raw: string | null): number {
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return Math.floor(value);
-}
 
 export default function CheckinsPage() {
   const router = useRouter();
@@ -97,33 +88,26 @@ export default function CheckinsPage() {
       setSubmitting(false);
     }
   }
-  const page = Math.floor(offset / limit) + 1;
-  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
-  const start = totalCount === 0 ? 0 : offset + 1;
-  const end = totalCount === 0 ? 0 : Math.min(offset + limit, totalCount);
-  const disablePrev = loading || offset === 0;
-  const disableNext = loading || offset + limit >= totalCount;
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Attendance check-ins</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Quick check-in by member ID or name search.
-        </p>
-      </div>
+      <PageHero
+        eyebrow="Attendance"
+        title="Fast, front-desk check-ins with premium visibility."
+        description="Search by ID or name and keep your gym floor attendance log clean and real-time."
+        imageSrc="/images/gym-checkins.jpg"
+      />
 
       {error && <Alert type="error">{error}</Alert>}
       {message && <Alert type="success">{message}</Alert>}
 
       <form
         onSubmit={onQuickCheckin}
-        className="grid gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]/80 p-5 sm:grid-cols-3"
+        className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur sm:grid-cols-3"
       >
         <div>
           <label className="text-xs text-[var(--muted)]">Member ID</label>
           <input
-            className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2"
             placeholder="M000001"
             value={idNumber}
             onChange={(e) => setIdNumber(e.target.value)}
@@ -132,7 +116,7 @@ export default function CheckinsPage() {
         <div>
           <label className="text-xs text-[var(--muted)]">Name search</label>
           <input
-            className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2"
             placeholder="John"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -152,9 +136,9 @@ export default function CheckinsPage() {
       {loading ? (
         <p className="text-[var(--muted)]">Loading check-ins...</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]/70">
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/40">
           <table className="w-full min-w-[680px] text-left text-sm">
-            <thead className="bg-[var(--surface-soft)]/70 text-[var(--muted)]">
+            <thead className="bg-white/5 text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-2">Time</th>
                 <th className="px-4 py-2">Member</th>
@@ -165,17 +149,23 @@ export default function CheckinsPage() {
             <tbody>
               {checkins.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-[var(--muted)]">
-                    No check-ins yet.
+                  <td colSpan={4} className="px-4 py-8">
+                    <EmptyState
+                      title="No check-ins recorded"
+                      message="Run a quick member check-in to begin today's attendance timeline."
+                      imageSrc="/images/gym-checkins.jpg"
+                    />
                   </td>
                 </tr>
               ) : (
                 checkins.map((c) => (
-                  <tr key={c.id} className="border-t border-[var(--border)]/70">
+                  <tr key={c.id} className="border-t border-white/10 hover:bg-white/[0.03]">
                     <td className="px-4 py-2">{new Date(c.checked_in_at).toLocaleString()}</td>
                     <td className="px-4 py-2">{c.member_name}</td>
                     <td className="px-4 py-2 font-mono text-xs">{c.member_id_number}</td>
-                    <td className="px-4 py-2 capitalize">{c.source}</td>
+                    <td className="px-4 py-2">
+                      <StatusBadge label={c.source} tone="neutral" />
+                    </td>
                   </tr>
                 ))
               )}
@@ -183,47 +173,18 @@ export default function CheckinsPage() {
           </table>
         </div>
       )}
-      <div className="flex items-center justify-end gap-2">
-        <label className="text-xs text-[var(--muted)]">
-          Page size
-          <select
-            className="ml-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs"
-            value={limit}
-            onChange={(e) => {
-              setLimit(Number(e.target.value));
-              setOffset(0);
-            }}
-          >
-            {PAGE_SIZES.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="text-xs text-[var(--muted)]">
-          Showing {start}-{end} of {totalCount} check-ins
-        </span>
-        <button
-          type="button"
-          disabled={disablePrev}
-          onClick={() => setOffset((prev) => Math.max(0, prev - limit))}
-          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <span className="text-xs text-[var(--muted)]">
-          Page {page} / {totalPages} ({totalCount} check-ins)
-        </span>
-        <button
-          type="button"
-          disabled={disableNext}
-          onClick={() => setOffset((prev) => prev + limit)}
-          className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+      <PaginationControls
+        noun="check-ins"
+        count={totalCount}
+        limit={limit}
+        offset={offset}
+        loading={loading}
+        onLimitChange={(value) => {
+          setLimit(value);
+          setOffset(0);
+        }}
+        onOffsetChange={setOffset}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ from django.db.models import Count, OuterRef, Q, Subquery, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -67,7 +68,50 @@ def _record_membership_history(member: Member, event: str):
     )
 
 
-class MemberViewSet(viewsets.ModelViewSet):
+def _apply_ordering(qs, requested, allowed, default):
+    if requested:
+        clean = [f.strip() for f in requested.split(",") if f.strip()]
+        valid = []
+        for field in clean:
+            bare = field[1:] if field.startswith("-") else field
+            if bare in allowed:
+                valid.append(field)
+        if valid:
+            return qs.order_by(*valid)
+    return qs.order_by(*default)
+
+
+class OptionalPaginationMixin:
+    """
+    Keep existing list responses unchanged unless pagination query params are provided.
+    Supports both page/page_size and limit/offset styles.
+    """
+
+    def paginate_queryset(self, queryset):
+        params = self.request.query_params
+        has_page_style = any(k in params for k in ("page", "page_size"))
+        has_limit_style = any(k in params for k in ("limit", "offset"))
+
+        if has_limit_style:
+            paginator = LimitOffsetPagination()
+            paginator.default_limit = 20
+            paginator.max_limit = 100
+            self._paginator = paginator
+            return paginator.paginate_queryset(queryset, self.request, view=self)
+
+        if has_page_style:
+            paginator = PageNumberPagination()
+            paginator.page_size = 20
+            paginator.page_size_query_param = "page_size"
+            paginator.max_page_size = 100
+            self._paginator = paginator
+            return paginator.paginate_queryset(queryset, self.request, view=self)
+
+        self._paginator = None
+        return None
+
+
+class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
     """Administrator-only CRUD, search, filters, renew, assign membership."""
 
     queryset = Member.objects.all()
@@ -134,7 +178,12 @@ class MemberViewSet(viewsets.ModelViewSet):
         if expiry_after:
             qs = qs.filter(end_date__gte=expiry_after)
 
-        return qs
+        return _apply_ordering(
+            qs,
+            self.request.query_params.get("ordering"),
+            {"created_at", "updated_at", "end_date", "start_date", "id_number", "first_name"},
+            ("-created_at",),
+        )
 
     def create(self, request, *args, **kwargs):
         write = MemberWriteSerializer(data=request.data)
@@ -194,7 +243,7 @@ class MemberViewSet(viewsets.ModelViewSet):
         return Response(data)
 
 
-class PaymentViewSet(viewsets.ModelViewSet):
+class PaymentViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
     """Record and list payments (admin only)."""
 
     queryset = Payment.objects.select_related("member").all()
@@ -221,7 +270,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
             Payment.Status.OVERDUE,
         ):
             qs = qs.filter(status=st)
-        return qs
+        return _apply_ordering(
+            qs,
+            self.request.query_params.get("ordering"),
+            {"created_at", "updated_at", "due_date", "amount", "status"},
+            ("-created_at",),
+        )
 
     def create(self, request, *args, **kwargs):
         ser = PaymentWriteSerializer(data=request.data)
@@ -244,7 +298,12 @@ class MemberNoteViewSet(viewsets.ModelViewSet):
         member_id = self.request.query_params.get("member")
         if member_id:
             qs = qs.filter(member_id=member_id)
-        return qs
+        return _apply_ordering(
+            qs,
+            self.request.query_params.get("ordering"),
+            {"checked_in_at"},
+            ("-checked_in_at",),
+        )
 
 
 class MembershipHistoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -260,7 +319,7 @@ class MembershipHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         return qs
 
 
-class AttendanceCheckinViewSet(viewsets.ModelViewSet):
+class AttendanceCheckinViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
     queryset = AttendanceCheckin.objects.select_related("member").all()
     serializer_class = AttendanceCheckinSerializer
     permission_classes = [IsAdminUser]

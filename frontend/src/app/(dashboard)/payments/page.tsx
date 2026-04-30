@@ -2,11 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
 import {
   apiFetch,
   createPayment,
-  fetchPayments,
+  fetchPaymentsPage,
   membersQuery,
   updatePayment,
   type Member,
@@ -15,11 +16,50 @@ import {
   type PaymentStatus,
 } from "@/lib/api";
 
+const PAGE_SIZES = [10, 20, 50, 100] as const;
+
+function parsePageSize(raw: string | null): number {
+  const value = Number(raw);
+  return PAGE_SIZES.includes(value as (typeof PAGE_SIZES)[number]) ? value : 20;
+}
+
+function parseOffset(raw: string | null): number {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.floor(value);
+}
+
+function parseFilterMember(raw: string | null): number | "" {
+  if (!raw) return "";
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return Math.floor(value);
+}
+
+function parseFilterStatus(raw: string | null): PaymentStatus | "" {
+  if (raw === "pending" || raw === "paid" || raw === "failed" || raw === "overdue") {
+    return raw;
+  }
+  return "";
+}
+
+function parseSortBy(raw: string | null): "created_at" | "amount" | "due_date" {
+  if (raw === "amount" || raw === "due_date") return raw;
+  return "created_at";
+}
+
 export default function PaymentsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [members, setMembers] = useState<Member[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [filterMember, setFilterMember] = useState<number | "">("");
-  const [filterStatus, setFilterStatus] = useState<PaymentStatus | "">("");
+  const [filterMember, setFilterMember] = useState<number | "">(() =>
+    parseFilterMember(searchParams.get("member"))
+  );
+  const [filterStatus, setFilterStatus] = useState<PaymentStatus | "">(() =>
+    parseFilterStatus(searchParams.get("status"))
+  );
   const [memberId, setMemberId] = useState<number | "">("");
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<PaymentStatus>("pending");
@@ -31,22 +71,32 @@ export default function PaymentsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [limit, setLimit] = useState(() => parsePageSize(searchParams.get("limit")));
+  const [offset, setOffset] = useState(() => parseOffset(searchParams.get("offset")));
+  const [totalCount, setTotalCount] = useState(0);
+  const [sortBy, setSortBy] = useState<"created_at" | "amount" | "due_date">(() =>
+    parseSortBy(searchParams.get("ordering"))
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const ordering =
+        sortBy === "created_at" ? "-created_at" : sortBy;
       const [mData, pData] = await Promise.all([
         apiFetch<Member[]>(membersQuery({})),
-        fetchPayments({
+        fetchPaymentsPage({
           member: filterMember || undefined,
           status: filterStatus || undefined,
+          limit,
+          offset,
+          ordering,
         }),
       ]);
       setMembers(mData);
-      setPayments(pData);
+      setPayments(pData.results);
+      setTotalCount(pData.count);
       setMemberId((prev) => {
         if (
           typeof prev === "number" &&
@@ -58,15 +108,47 @@ export default function PaymentsPage() {
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
+      setPayments([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [filterMember, filterStatus]);
+  }, [filterMember, filterStatus, limit, offset, sortBy]);
 
   useEffect(() => {
-    setPage(1);
+    const ordering = sortBy === "created_at" ? "-created_at" : sortBy;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("limit", String(limit));
+    params.set("offset", String(offset));
+    params.set("ordering", ordering);
+    if (filterMember) params.set("member", String(filterMember));
+    else params.delete("member");
+    if (filterStatus) params.set("status", filterStatus);
+    else params.delete("status");
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      router.replace(`${pathname}?${next}`, { scroll: false });
+    }
+  }, [
+    filterMember,
+    filterStatus,
+    limit,
+    offset,
+    pathname,
+    router,
+    searchParams,
+    sortBy,
+  ]);
+
+  useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (totalCount > 0 && offset >= totalCount) {
+      setOffset(Math.max(0, Math.floor((totalCount - 1) / limit) * limit));
+    }
+  }, [limit, offset, totalCount]);
 
   async function onRecord(e: FormEvent) {
     e.preventDefault();
@@ -107,8 +189,12 @@ export default function PaymentsPage() {
       alert(e instanceof Error ? e.message : "Update failed");
     }
   }
-  const totalPages = Math.max(1, Math.ceil(payments.length / pageSize));
-  const pagedPayments = payments.slice((page - 1) * pageSize, page * pageSize);
+  const page = Math.floor(offset / limit) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+  const start = totalCount === 0 ? 0 : offset + 1;
+  const end = totalCount === 0 ? 0 : Math.min(offset + limit, totalCount);
+  const disablePrev = loading || offset === 0;
+  const disableNext = loading || offset + limit >= totalCount;
 
   return (
     <div className="space-y-8">
@@ -225,9 +311,10 @@ export default function PaymentsPage() {
               <select
                 className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
                 value={filterMember === "" ? "" : filterMember}
-                onChange={(e) =>
-                  setFilterMember(e.target.value ? Number(e.target.value) : "")
-                }
+                onChange={(e) => {
+                  setFilterMember(e.target.value ? Number(e.target.value) : "");
+                  setOffset(0);
+                }}
               >
                 <option value="">All members</option>
                 {members.map((m) => (
@@ -242,17 +329,51 @@ export default function PaymentsPage() {
               <select
                 className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 capitalize"
                 value={filterStatus}
-                onChange={(e) =>
+                onChange={(e) => {
                   setFilterStatus(
                     e.target.value ? (e.target.value as PaymentStatus) : ""
-                  )
-                }
+                  );
+                  setOffset(0);
+                }}
               >
                 <option value="">All</option>
                 <option value="pending">Pending</option>
                 <option value="paid">Paid</option>
                 <option value="failed">Failed</option>
                 <option value="overdue">Overdue</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--muted)]">Page size</label>
+              <select
+                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+                value={limit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setOffset(0);
+                }}
+              >
+                {PAGE_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[var(--muted)]">Sort</label>
+              <select
+                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+                value={sortBy}
+                onChange={(e) =>
+                  setSortBy(
+                    e.target.value as "created_at" | "amount" | "due_date"
+                  )
+                }
+              >
+                <option value="created_at">Newest first</option>
+                <option value="amount">Amount (low to high)</option>
+                <option value="due_date">Due date (old to new)</option>
               </select>
             </div>
           </div>
@@ -286,7 +407,7 @@ export default function PaymentsPage() {
                   </td>
                 </tr>
               ) : (
-                pagedPayments.map((p) => (
+                payments.map((p) => (
                   <tr key={p.id} className="border-t border-[var(--border)]">
                     <td className="px-4 py-2 text-xs">
                       {new Date(p.created_at).toLocaleString()}
@@ -343,21 +464,24 @@ export default function PaymentsPage() {
         </div>
       )}
       <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-[var(--muted)]">
+          Showing {start}-{end} of {totalCount} records
+        </span>
         <button
           type="button"
-          disabled={page <= 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={disablePrev}
+          onClick={() => setOffset((prev) => Math.max(0, prev - limit))}
           className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
         >
           Prev
         </button>
         <span className="text-xs text-[var(--muted)]">
-          Page {page} / {totalPages}
+          Page {page} / {totalPages} ({totalCount} records)
         </span>
         <button
           type="button"
-          disabled={page >= totalPages}
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          disabled={disableNext}
+          onClick={() => setOffset((prev) => prev + limit)}
           className="rounded-md border border-[var(--border)] px-3 py-1 text-xs disabled:opacity-50"
         >
           Next

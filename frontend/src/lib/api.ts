@@ -142,6 +142,13 @@ export type GymSettings = {
   updated_at: string;
 };
 
+export type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
 async function refreshAccess(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
@@ -251,6 +258,9 @@ export function membersQuery(params: {
   payment_status?: "" | PaymentStatus | "none";
   expiry_before?: string;
   expiry_after?: string;
+  limit?: number;
+  offset?: number;
+  ordering?: string;
 }) {
   const q = new URLSearchParams();
   if (params.search?.trim()) q.set("search", params.search.trim());
@@ -260,6 +270,9 @@ export function membersQuery(params: {
   if (params.payment_status) q.set("payment_status", params.payment_status);
   if (params.expiry_before) q.set("expiry_before", params.expiry_before);
   if (params.expiry_after) q.set("expiry_after", params.expiry_after);
+  if (typeof params.limit === "number") q.set("limit", String(params.limit));
+  if (typeof params.offset === "number") q.set("offset", String(params.offset));
+  if (params.ordering?.trim()) q.set("ordering", params.ordering.trim());
   const suffix = q.toString();
   return `/api/members/${suffix ? `?${suffix}` : ""}`;
 }
@@ -320,10 +333,16 @@ export async function markMemberPaid(id: number) {
 export function paymentsQuery(params: {
   member?: number;
   status?: PaymentStatus;
+  limit?: number;
+  offset?: number;
+  ordering?: string;
 }) {
   const q = new URLSearchParams();
   if (params.member) q.set("member", String(params.member));
   if (params.status) q.set("status", params.status);
+  if (typeof params.limit === "number") q.set("limit", String(params.limit));
+  if (typeof params.offset === "number") q.set("offset", String(params.offset));
+  if (params.ordering?.trim()) q.set("ordering", params.ordering.trim());
   const suffix = q.toString();
   return `/api/payments/${suffix ? `?${suffix}` : ""}`;
 }
@@ -334,6 +353,17 @@ export async function fetchPayments(params?: {
 }) {
   const path = paymentsQuery(params ?? {});
   return apiFetch<Payment[]>(path);
+}
+
+export async function fetchPaymentsPage(params?: {
+  member?: number;
+  status?: PaymentStatus;
+  limit?: number;
+  offset?: number;
+  ordering?: string;
+}) {
+  const path = paymentsQuery(params ?? {});
+  return apiFetch<PaginatedResponse<Payment>>(path);
 }
 
 export async function createPayment(body: {
@@ -388,6 +418,21 @@ export async function fetchCheckins(params?: { member?: number }) {
   if (params?.member) q.set("member", String(params.member));
   const suffix = q.toString();
   return apiFetch<Checkin[]>(`/api/checkins/${suffix ? `?${suffix}` : ""}`);
+}
+
+export async function fetchCheckinsPage(params?: {
+  member?: number;
+  limit?: number;
+  offset?: number;
+  ordering?: string;
+}) {
+  const q = new URLSearchParams();
+  if (params?.member) q.set("member", String(params.member));
+  if (typeof params?.limit === "number") q.set("limit", String(params.limit));
+  if (typeof params?.offset === "number") q.set("offset", String(params.offset));
+  if (params?.ordering?.trim()) q.set("ordering", params.ordering.trim());
+  const suffix = q.toString();
+  return apiFetch<PaginatedResponse<Checkin>>(`/api/checkins/${suffix ? `?${suffix}` : ""}`);
 }
 
 export async function quickCheckin(body: {

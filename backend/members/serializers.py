@@ -55,7 +55,11 @@ class MemberSerializer(serializers.ModelSerializer):
 
     def get_membership_status(self, obj):
         today = timezone.localdate()
-        return "active" if obj.end_date >= today else "expired"
+        if obj.member_payment_status != RecordedMemberPaymentStatus.PAID:
+            return "not_active"
+        if obj.end_date >= today:
+            return "active"
+        return "expired"
 
     def get_latest_payment_status(self, obj):
         if hasattr(obj, "latest_payment_status"):

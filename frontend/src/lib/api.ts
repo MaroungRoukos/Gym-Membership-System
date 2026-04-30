@@ -3,8 +3,37 @@ import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./auth"
 const base = () =>
   (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
+const GET_CACHE_TTL_MS = 15_000;
+const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
+
+function cacheKey(path: string): string {
+  return `${base()}${path}`;
+}
+
+function readCached<T>(path: string): T | null {
+  const key = cacheKey(path);
+  const hit = responseCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    responseCache.delete(key);
+    return null;
+  }
+  return hit.value as T;
+}
+
+function writeCached(path: string, value: unknown) {
+  responseCache.set(cacheKey(path), {
+    expiresAt: Date.now() + GET_CACHE_TTL_MS,
+    value,
+  });
+}
+
+function invalidateCache() {
+  responseCache.clear();
+}
+
 export type MemberPlan = "monthly" | "quarterly" | "yearly";
-export type MembershipStatus = "active" | "expired";
+export type MembershipStatus = "active" | "expired" | "not_active";
 export type PaymentStatus = "pending" | "paid" | "failed";
 
 /** Recorded enrollment/dues status on the member (see member_payment_status in API). */
@@ -76,6 +105,12 @@ export async function apiFetch<T>(
   options: RequestInit = {},
   retried = false
 ): Promise<T> {
+  const method = (options.method || "GET").toUpperCase();
+  if (method === "GET" && !retried) {
+    const cached = readCached<T>(path);
+    if (cached !== null) return cached;
+  }
+
   const token = getAccessToken();
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) {
@@ -101,7 +136,13 @@ export async function apiFetch<T>(
     throw new Error(detail || `Request failed: ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  const data = (await res.json()) as T;
+  if (method === "GET") {
+    writeCached(path, data);
+  } else {
+    invalidateCache();
+  }
+  return data;
 }
 
 export async function login(username: string, password: string) {
@@ -122,6 +163,7 @@ export async function login(username: string, password: string) {
   }
   const data = (await res.json()) as { access: string; refresh: string };
   setTokens(data.access, data.refresh);
+  invalidateCache();
 }
 
 export async function logout() {
@@ -138,6 +180,7 @@ export async function logout() {
     }
   }
   clearTokens();
+  invalidateCache();
 }
 
 export function membersQuery(params: {
@@ -198,6 +241,13 @@ export async function assignMembership(
   return apiFetch<Member>(`/api/members/${id}/assign-membership/`, {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export async function markMemberPaid(id: number) {
+  return apiFetch<Member>(`/api/members/${id}/mark-paid/`, {
+    method: "POST",
+    body: JSON.stringify({}),
   });
 }
 

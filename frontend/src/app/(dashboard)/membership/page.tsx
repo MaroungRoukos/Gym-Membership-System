@@ -138,7 +138,9 @@ export default function MembershipPage() {
                   {selected.plan}
                 </span>{" "}
                 · Active/expired:{" "}
-                <span className="capitalize">{selected.membership_status}</span>{" "}
+                <span className="capitalize">
+                  {selected.membership_status.replace("_", " ")}
+                </span>{" "}
                 ·{" "}
                 <Link
                   href={`/members/${selected.id}/edit`}

@@ -102,7 +102,7 @@ export default function DashboardPage() {
                     <td className="px-4 py-2 capitalize">{m.plan}</td>
                     <td className="px-4 py-2">{m.end_date}</td>
                     <td className="px-4 py-2 capitalize">
-                      {m.membership_status}
+                      {m.membership_status.replace("_", " ")}
                     </td>
                   </tr>
                 ))}

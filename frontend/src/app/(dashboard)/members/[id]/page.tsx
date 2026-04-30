@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
-import { fetchMember, type Member, type MemberPlan } from "@/lib/api";
+import {
+  fetchMember,
+  markMemberPaid,
+  type Member,
+  type MemberPlan,
+} from "@/lib/api";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -112,6 +117,8 @@ export default function MemberDetailsPage() {
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
   const initials = useMemo(
     () => (member ? memberInitials(member) : ""),
@@ -181,8 +188,24 @@ export default function MemberDetailsPage() {
     );
   }
 
+  async function onMarkPaid() {
+    setPaymentActionError(null);
+    setMarkingPaid(true);
+    try {
+      const updated = await markMemberPaid(member.id);
+      setMember(updated);
+    } catch (e) {
+      setPaymentActionError(
+        e instanceof Error ? e.message : "Could not update payment status."
+      );
+    } finally {
+      setMarkingPaid(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-4xl">
+      {paymentActionError && <Alert type="error">{paymentActionError}</Alert>}
       <nav
         className="mb-3 flex flex-wrap items-center gap-1.5 text-[0.75rem] text-[var(--muted)]"
         aria-label="Breadcrumb"
@@ -229,7 +252,9 @@ export default function MemberDetailsPage() {
                   >
                     {member.membership_status === "active"
                       ? "Active membership"
-                      : "Membership expired"}
+                      : member.membership_status === "expired"
+                        ? "Membership expired"
+                        : "Membership not active"}
                   </StatusPill>
                   <StatusPill
                     tone={
@@ -244,6 +269,16 @@ export default function MemberDetailsPage() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:pt-1">
+              {member.member_payment_status !== "paid" && (
+                <button
+                  type="button"
+                  onClick={onMarkPaid}
+                  disabled={markingPaid}
+                  className="rounded-md border border-emerald-400/40 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-60"
+                >
+                  {markingPaid ? "Marking..." : "Mark payment paid"}
+                </button>
+              )}
               <Link
                 href="/members"
                 className="rounded-md border border-[var(--border)] bg-[var(--background)]/60 px-3 py-1.5 text-xs font-medium text-[var(--foreground)] transition hover:border-[var(--muted)] hover:bg-[var(--background)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"

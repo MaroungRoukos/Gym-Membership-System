@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Alert } from "@/components/Alert";
 import {
@@ -28,16 +28,18 @@ export default function PaymentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const mData = await apiFetch<Member[]>(membersQuery({}));
+      const [mData, pData] = await Promise.all([
+        apiFetch<Member[]>(membersQuery({})),
+        fetchPayments({
+          member: filterMember || undefined,
+          status: filterStatus || undefined,
+        }),
+      ]);
       setMembers(mData);
-      const pData = await fetchPayments({
-        member: filterMember || undefined,
-        status: filterStatus || undefined,
-      });
       setPayments(pData);
       setMemberId((prev) => {
         if (
@@ -53,11 +55,11 @@ export default function PaymentsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filterMember, filterStatus]);
 
   useEffect(() => {
     load();
-  }, [filterMember, filterStatus]);
+  }, [load]);
 
   async function onRecord(e: FormEvent) {
     e.preventDefault();

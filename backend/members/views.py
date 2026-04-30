@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import Member, Payment
+from .models import Member, Payment, RecordedMemberPaymentStatus
 from .serializers import (
     AdminTokenObtainPairSerializer,
     AssignMembershipSerializer,
@@ -72,9 +72,18 @@ class MemberViewSet(viewsets.ModelViewSet):
             )
 
         if membership_status == "active":
-            qs = qs.filter(end_date__gte=today)
+            qs = qs.filter(
+                end_date__gte=today,
+                member_payment_status=RecordedMemberPaymentStatus.PAID,
+            )
         elif membership_status == "expired":
-            qs = qs.filter(end_date__lt=today)
+            qs = qs.exclude(
+                end_date__gte=today,
+                member_payment_status=RecordedMemberPaymentStatus.PAID,
+            )
+            qs = qs.filter(member_payment_status=RecordedMemberPaymentStatus.PAID)
+        elif membership_status == "not_active":
+            qs = qs.exclude(member_payment_status=RecordedMemberPaymentStatus.PAID)
 
         if plan in (Member.Plan.MONTHLY, Member.Plan.QUARTERLY, Member.Plan.YEARLY):
             qs = qs.filter(plan=plan)
@@ -134,6 +143,16 @@ class MemberViewSet(viewsets.ModelViewSet):
         data = _member_for_response(member.pk, self.get_serializer_context())
         return Response(data)
 
+    @action(detail=True, methods=["post"], url_path="mark-paid")
+    def mark_paid(self, request, pk=None):
+        member = self.get_object()
+        member.member_payment_status = RecordedMemberPaymentStatus.PAID
+        if not member.payment_received_on:
+            member.payment_received_on = timezone.localdate()
+        member.save(update_fields=["member_payment_status", "payment_received_on", "updated_at"])
+        data = _member_for_response(member.pk, self.get_serializer_context())
+        return Response(data)
+
 
 class PaymentViewSet(viewsets.ModelViewSet):
     """Record and list payments (admin only)."""
@@ -180,8 +199,14 @@ class DashboardView(APIView):
         today = timezone.localdate()
         members = Member.objects.all()
         total_members = members.count()
-        active_memberships = members.filter(end_date__gte=today).count()
-        expired_memberships = members.filter(end_date__lt=today).count()
+        active_memberships = members.filter(
+            end_date__gte=today,
+            member_payment_status=RecordedMemberPaymentStatus.PAID,
+        ).count()
+        expired_memberships = members.filter(
+            end_date__lt=today,
+            member_payment_status=RecordedMemberPaymentStatus.PAID,
+        ).count()
 
         paid_agg = Payment.objects.filter(status=Payment.Status.PAID).aggregate(
             total=Sum("amount")
@@ -195,7 +220,11 @@ class DashboardView(APIView):
             days = 30
         until = today + timedelta(days=days)
         expiring = (
-            members.filter(end_date__gte=today, end_date__lte=until)
+            members.filter(
+                end_date__gte=today,
+                end_date__lte=until,
+                member_payment_status=RecordedMemberPaymentStatus.PAID,
+            )
             .order_by("end_date")[:50]
         )
         expiring_data = MemberSerializer(

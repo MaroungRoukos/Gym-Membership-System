@@ -143,7 +143,7 @@ export default function MembersPage() {
                             : "text-[var(--muted)]"
                         }
                       >
-                        {m.membership_status}
+                        {m.membership_status.replace("_", " ")}
                       </span>
                     </td>
                     <td className="px-4 py-3 capitalize text-xs">

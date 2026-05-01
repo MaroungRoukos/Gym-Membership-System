@@ -372,35 +372,35 @@ export default function PaymentsPage() {
       {error && <Alert type="error">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-        <aside className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-          <h2 className="font-medium">Find member</h2>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr] xl:grid-cols-[460px_1fr]">
+        <aside className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+          <h2 className="text-xl font-semibold">Find member</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Search and select a member before recording a payment.
+          </p>
           <input
             value={memberSearch}
             onChange={(e) => {
               setMemberSearch(e.target.value);
             }}
             placeholder="Search name, member ID, or phone"
-            className="w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm"
+            className="mt-4 w-full rounded-lg border border-white/15 bg-slate-900/60 px-4 py-3 text-sm"
           />
-          <div className="mt-3 h-[600px] space-y-2 overflow-y-auto pr-1">
+          <div className="mt-4 max-h-[680px] space-y-4 overflow-y-auto pr-1">
             {filteredMemberOptions.length > 0 ? (
               filteredMemberOptions.map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => handleSelectMember(m)}
-                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
+                  className={`w-full rounded-xl px-4 py-4 text-left text-sm transition ${
                     selectedMember?.id === m.id
-                      ? "border-[var(--accent)] bg-[var(--accent)]/18 ring-1 ring-[var(--accent)]/35"
-                      : "border-white/10 bg-slate-900/40 hover:bg-slate-900/60"
+                      ? "border border-[var(--accent)] bg-[var(--accent)]/14 shadow-[0_0_0_1px_var(--accent)]"
+                      : "border border-white/10 bg-slate-900/40 hover:bg-[var(--muted)]/40"
                   }`}
                 >
-                  <p className="font-medium text-[var(--foreground)]">{m.full_name}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {m.id_number} · {m.phone}
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-base font-semibold text-[var(--foreground)]">{m.full_name}</p>
                     <span
                       className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${memberStatusBadgeClass(
                         m.membership_status
@@ -408,13 +408,18 @@ export default function PaymentsPage() {
                     >
                       {m.membership_status.replace(/_/g, " ")}
                     </span>
+                  </div>
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    {m.id_number} · {m.phone}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
                     <span className="text-[11px] text-[var(--muted)] capitalize">
-                      {m.plan}
+                      Plan: {m.plan}
                     </span>
+                    <span>•</span>
                     <span className="text-[11px] text-[var(--muted)]">
-                      {m.member_payment_status === "pending"
-                        ? "Outstanding: pending"
-                        : "Outstanding: —"}
+                      Outstanding:{" "}
+                      {m.member_payment_status === "pending" ? "pending" : "none"}
                     </span>
                   </div>
                 </button>
@@ -438,9 +443,9 @@ export default function PaymentsPage() {
           )}
         </aside>
 
-        <section className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur transition-all">
+        <section className="max-w-4xl space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur transition-all">
           {!selectedMember ? (
-            <div className="flex min-h-[360px] items-center justify-center rounded-xl bg-slate-900/35">
+            <div className="flex min-h-[360px] items-center justify-center">
               <p className="text-center text-sm text-[var(--muted)]">
                 Select a member to record a payment
               </p>
@@ -449,10 +454,10 @@ export default function PaymentsPage() {
             <form onSubmit={onRecord} className="space-y-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-medium">
+                  <h2 className="text-2xl font-semibold tracking-tight">
                     Record payment for {selectedMember.full_name}
                   </h2>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
                     <span>{selectedMember.id_number}</span>
                     <span>•</span>
                     <span>{selectedMember.phone}</span>
@@ -470,19 +475,19 @@ export default function PaymentsPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedMember(null)}
-                  className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-white"
+                  className="rounded-md px-3 py-1 text-sm text-[var(--muted)] transition hover:bg-white/5 hover:text-white"
                 >
                   Change member
                 </button>
               </div>
 
               {isMembershipActive(selectedMember.membership_status) ? (
-                <div className="rounded-md bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
+                <div className="border-l-2 border-blue-500 pl-3 text-sm text-[var(--muted)]">
                   This member already has an active membership. Recording a
                   payment will NOT extend or change their membership.
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-blue-500 pl-3 text-sm text-[var(--muted)]">
                   <span>
                     This member&apos;s membership is not active. You may want to
                     renew their membership after recording payment.
@@ -498,33 +503,41 @@ export default function PaymentsPage() {
                 </div>
               )}
 
-              <p className="text-xs text-[var(--muted)]">
-                Invoice preview:{" "}
-                <span className="font-mono text-[var(--foreground)]">{generatedInvoiceNumber}</span>
+              <p className="text-sm text-[var(--muted)]">
+                Invoice #{" "}
+                <span className="rounded bg-[var(--muted)]/20 px-2 py-1 text-xs font-mono text-[var(--foreground)]">
+                  {generatedInvoiceNumber}
+                </span>
                 {lastCreatedInvoice && (
                   <>
-                    {" "}
-                    · Last saved{" "}
-                    <span className="font-mono text-[var(--foreground)]">{lastCreatedInvoice}</span>
+                    <span className="mx-2">•</span>
+                    Last saved{" "}
+                    <span className="rounded bg-[var(--muted)]/20 px-2 py-1 text-xs font-mono text-[var(--foreground)]">
+                      {lastCreatedInvoice}
+                    </span>
                   </>
                 )}
               </p>
 
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <div>
                   <label className="text-xs text-[var(--muted)]">Amount</label>
-                  <input
-                    ref={amountInputRef}
-                    required
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="mt-1 w-full rounded-lg border border-[var(--accent)]/40 bg-[var(--background)] px-3 py-3 text-lg font-semibold"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
+                  <div className="mt-1 flex items-center rounded-lg border border-[var(--accent)]/50 bg-[var(--background)] px-3">
+                    <span className="pr-2 text-lg text-[var(--muted)]">$</span>
+                    <input
+                      ref={amountInputRef}
+                      required
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      className="w-full bg-transparent py-3 text-xl font-semibold outline-none"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <label className="text-xs text-[var(--muted)]">Payment date</label>
                     <label className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
@@ -596,7 +609,7 @@ export default function PaymentsPage() {
                   <button
                     type="submit"
                     disabled={!selectedMember || !amount || submitting}
-                    className="w-full rounded-lg bg-[var(--accent)] px-4 py-2 text-white disabled:opacity-50 sm:w-auto"
+                    className="w-full rounded-lg bg-[var(--accent)] px-5 py-2.5 text-white transition hover:brightness-110 disabled:opacity-50 sm:w-auto"
                   >
                     {submitting ? "Saving…" : "Save payment"}
                   </button>
@@ -617,25 +630,25 @@ export default function PaymentsPage() {
                 ) : null}
               </div>
 
-              <div>
-                <p className="text-xs text-[var(--muted)]">Past invoices</p>
+              <div className="space-y-2 border-t border-white/10 pt-4">
+                <p className="text-sm text-[var(--muted)]">Past invoices</p>
                 {recentPaymentsLoading ? (
-                  <p className="mt-2 text-xs text-[var(--muted)]">Loading past invoices…</p>
+                  <p className="text-sm text-[var(--muted)]">Loading past invoices…</p>
                 ) : memberRecentPayments.length === 0 ? (
-                  <p className="mt-2 text-xs text-[var(--muted)]">
+                  <p className="text-sm text-[var(--muted)]">
                     No past invoices for this member.
                   </p>
                 ) : (
-                  <div className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs">
+                  <div className="max-h-48 space-y-1 overflow-y-auto text-sm">
                     {memberRecentPayments.slice(0, 5).map((p) => (
                       <div
                         key={p.id}
-                        className="grid grid-cols-4 gap-2 rounded-md bg-slate-900/35 px-2 py-1.5 text-[11px]"
+                        className="grid grid-cols-4 gap-2 px-2 py-1 text-[var(--muted)]"
                       >
-                        <span className="truncate font-mono text-[var(--foreground)]">
+                        <span className="truncate font-mono text-xs text-[var(--foreground)]">
                           {p.invoice_number || "—"}
                         </span>
-                        <span className="tabular-nums">${p.amount}</span>
+                        <span className="tabular-nums text-sm">${p.amount}</span>
                         <span className="capitalize text-[var(--muted)]">{p.status}</span>
                         <span className="text-[var(--muted)]">
                           {new Date(p.created_at).toLocaleDateString()} · due {p.due_date ?? "—"}

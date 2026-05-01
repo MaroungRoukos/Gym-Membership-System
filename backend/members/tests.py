@@ -7,7 +7,20 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import AttendanceCheckin, Member, Payment, RecordedMemberPaymentStatus
+from .finance import member_financial_summary
+from .models import (
+    AttendanceCheckin,
+    Member,
+    MemberCharge,
+    Payment,
+    RecordedMemberPaymentStatus,
+)
+
+
+def _as_decimal(value) -> Decimal:
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
 
 
 class BaseAPITestCase(APITestCase):
@@ -147,6 +160,77 @@ class MemberApiTests(BaseAPITestCase):
         dates = [item["end_date"] for item in response.data["results"]]
         self.assertEqual(dates, sorted(dates))
 
+    def test_member_financial_summary_uses_only_paid_payments(self):
+        self.authenticate_admin()
+        member = self.create_member(20)
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("50.00"),
+            status=Payment.Status.PAID,
+            method=Payment.Method.CASH,
+        )
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("999.00"),
+            status=Payment.Status.PENDING,
+            method=Payment.Method.CARD,
+        )
+
+        response = self.client.get(f"/api/members/{member.id}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(_as_decimal(response.data["total_paid"]), Decimal("50.00"))
+        self.assertEqual(_as_decimal(response.data["total_charged"]), Decimal("0.00"))
+        self.assertEqual(_as_decimal(response.data["outstanding_amount"]), Decimal("0.00"))
+        self.assertEqual(_as_decimal(response.data["account_balance"]), Decimal("50.00"))
+        self.assertEqual(response.data["balance_status"], "credit")
+
+    def test_member_financial_summary_pending_only_stays_settled(self):
+        self.authenticate_admin()
+        member = self.create_member(21)
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("40.00"),
+            status=Payment.Status.PENDING,
+            method=Payment.Method.CASH,
+        )
+
+        response = self.client.get(f"/api/members/{member.id}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(_as_decimal(response.data["total_paid"]), Decimal("0.00"))
+        self.assertEqual(_as_decimal(response.data["outstanding_amount"]), Decimal("0.00"))
+        self.assertEqual(_as_decimal(response.data["account_balance"]), Decimal("0.00"))
+        self.assertEqual(response.data["balance_status"], "settled")
+
+    def test_renew_membership_allowed_with_pending_payment(self):
+        self.authenticate_admin()
+        member = self.create_member(22)
+        previous_end = member.end_date
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("25.00"),
+            status=Payment.Status.PENDING,
+            method=Payment.Method.CASH,
+        )
+
+        response = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        member.refresh_from_db()
+        self.assertGreater(member.end_date, previous_end)
+
+    def test_member_financial_summary_function_returns_credit_for_paid_payment(self):
+        member = self.create_member(23)
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("50.00"),
+            status=Payment.Status.PAID,
+            method=Payment.Method.CASH,
+        )
+
+        summary = member_financial_summary(member.id)
+        self.assertEqual(summary["total_paid"], Decimal("50.00"))
+        self.assertEqual(summary["account_balance"], Decimal("50.00"))
+        self.assertEqual(summary["balance_status"], "credit")
+
 
 class PaymentApiTests(BaseAPITestCase):
     def test_payments_list_supports_pagination(self):
@@ -224,18 +308,44 @@ class PaymentApiTests(BaseAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_create_payment_paid_immediately_updates_member_financial_summary(self):
+        self.authenticate_admin()
+        member = self.create_member(3)
+
+        create_response = self.client.post(
+            "/api/payments/",
+            {
+                "member": member.id,
+                "amount": "50.00",
+                "purpose": "membership",
+                "status": "paid",
+                "mark_as_paid": True,
+                "method": "cash",
+                "payment_date": timezone.localdate().isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_response.data["status"], "paid")
+
+        member_response = self.client.get(f"/api/members/{member.id}/")
+        self.assertEqual(member_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(_as_decimal(member_response.data["total_paid"]), Decimal("50.00"))
+        self.assertEqual(_as_decimal(member_response.data["account_balance"]), Decimal("50.00"))
+        self.assertEqual(_as_decimal(member_response.data["outstanding_amount"]), Decimal("0.00"))
+        self.assertEqual(member_response.data["balance_status"], "credit")
+
 
 class RenewalFinancialValidationTests(BaseAPITestCase):
     def test_cannot_renew_with_debt(self):
         self.authenticate_admin()
         member = self.create_member(20)
-        Payment.objects.create(
+        MemberCharge.objects.create(
             member=member,
+            title="Outstanding",
+            purpose=MemberCharge.Purpose.MEMBERSHIP,
             amount=Decimal("100.00"),
-            status=Payment.Status.PENDING,
-            purpose=Payment.Purpose.MEMBERSHIP,
-            method=Payment.Method.CASH,
-            payment_date=timezone.localdate(),
+            status=MemberCharge.Status.UNPAID,
         )
         response = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -244,13 +354,12 @@ class RenewalFinancialValidationTests(BaseAPITestCase):
     def test_can_renew_when_balance_zero(self):
         self.authenticate_admin()
         member = self.create_member(21)
-        Payment.objects.create(
+        MemberCharge.objects.create(
             member=member,
+            title="Membership",
+            purpose=MemberCharge.Purpose.MEMBERSHIP,
             amount=Decimal("50.00"),
-            status=Payment.Status.PENDING,
-            purpose=Payment.Purpose.MEMBERSHIP,
-            method=Payment.Method.CASH,
-            payment_date=timezone.localdate(),
+            status=MemberCharge.Status.UNPAID,
         )
         Payment.objects.create(
             member=member,
@@ -280,13 +389,12 @@ class RenewalFinancialValidationTests(BaseAPITestCase):
     def test_force_renew_bypasses_balance_check(self):
         self.authenticate_admin()
         member = self.create_member(23)
-        Payment.objects.create(
+        MemberCharge.objects.create(
             member=member,
+            title="Late balance",
+            purpose=MemberCharge.Purpose.MEMBERSHIP,
             amount=Decimal("120.00"),
-            status=Payment.Status.PENDING,
-            purpose=Payment.Purpose.MEMBERSHIP,
-            method=Payment.Method.CASH,
-            payment_date=timezone.localdate(),
+            status=MemberCharge.Status.UNPAID,
         )
         response = self.client.post(
             f"/api/members/{member.id}/renew/",
@@ -295,26 +403,25 @@ class RenewalFinancialValidationTests(BaseAPITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_payment_reduces_debt_and_enables_renewal(self):
+    def test_settling_charge_enables_renewal(self):
         self.authenticate_admin()
         member = self.create_member(24)
-        pending = Payment.objects.create(
+        charge = MemberCharge.objects.create(
             member=member,
+            title="Membership due",
+            purpose=MemberCharge.Purpose.MEMBERSHIP,
             amount=Decimal("60.00"),
-            status=Payment.Status.PENDING,
-            purpose=Payment.Purpose.MEMBERSHIP,
-            method=Payment.Method.CASH,
-            payment_date=timezone.localdate(),
+            status=MemberCharge.Status.UNPAID,
         )
         blocked = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
         self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
 
-        paid = self.client.patch(
-            f"/api/payments/{pending.id}/",
+        settled = self.client.patch(
+            f"/api/member-charges/{charge.id}/",
             {"status": "paid"},
             format="json",
         )
-        self.assertEqual(paid.status_code, status.HTTP_200_OK)
+        self.assertEqual(settled.status_code, status.HTTP_200_OK)
 
         allowed = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
@@ -358,11 +465,12 @@ class DashboardApiTests(BaseAPITestCase):
             status=Payment.Status.PAID,
             method=Payment.Method.CARD,
         )
-        Payment.objects.create(
+        MemberCharge.objects.create(
             member=member,
+            title="Pending fee",
+            purpose=MemberCharge.Purpose.OTHER,
             amount=Decimal("50.00"),
-            status=Payment.Status.PENDING,
-            method=Payment.Method.CASH,
+            status=MemberCharge.Status.UNPAID,
         )
         AttendanceCheckin.objects.create(member=member, source=AttendanceCheckin.Source.DESK)
 

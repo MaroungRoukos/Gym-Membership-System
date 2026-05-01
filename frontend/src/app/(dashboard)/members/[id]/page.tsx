@@ -474,6 +474,16 @@ export default function MemberDetailsPage() {
                   </span>
                 }
               />
+              {accountBalance > 0 && (
+                <DataRow
+                  label="Balance"
+                  value={
+                    <span className="font-medium text-emerald-300/90">
+                      Member has credit: ${member.account_balance}
+                    </span>
+                  }
+                />
+              )}
               <DataRow
                 label="Outstanding amount"
                 value={<span>${outstandingAmount.toFixed(2)}</span>}

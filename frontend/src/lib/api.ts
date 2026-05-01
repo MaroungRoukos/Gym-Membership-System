@@ -76,6 +76,7 @@ export type Member = {
   total_charged: string;
   outstanding_amount: string;
   account_balance: string;
+  balance_status: "credit" | "owes" | "settled";
   created_at: string;
   updated_at: string;
 };
@@ -402,6 +403,7 @@ export async function createPayment(body: {
   member: number;
   amount: string;
   purpose: PaymentPurpose;
+  status?: "pending" | "paid";
   mark_as_paid?: boolean;
   method?: PaymentMethod;
   payment_date: string;

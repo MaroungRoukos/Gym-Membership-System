@@ -67,6 +67,7 @@ export default function MembershipPage() {
   const preferredMemberId = Number(searchParams.get("member") || "");
   const [members, setMembers] = useState<Member[]>([]);
   const [memberId, setMemberId] = useState<number | "">("");
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [assignPlan, setAssignPlan] = useState<MemberPlan>("monthly");
   const [assignStart, setAssignStart] = useState(
     () => new Date().toISOString().slice(0, 10)
@@ -81,6 +82,15 @@ export default function MembershipPage() {
   const [assignError, setAssignError] = useState<string | null>(null);
   const [renewSuccess, setRenewSuccess] = useState<string | null>(null);
   const [renewError, setRenewError] = useState<string | null>(null);
+
+  const fetchMemberDetail = useCallback(async (id: number) => {
+    const freshMember = await apiFetch<Member>(
+      `/api/members/${id}/?refresh=${Date.now()}`
+    );
+    setSelectedMember(freshMember);
+    setMembers((prev) => prev.map((m) => (m.id === freshMember.id ? freshMember : m)));
+    return freshMember;
+  }, []);
 
   const loadMembers = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -120,7 +130,30 @@ export default function MembershipPage() {
     setRenewError(null);
   }, [memberId]);
 
-  const selected = members.find((m) => m.id === memberId) ?? null;
+  useEffect(() => {
+    if (!memberId) {
+      setSelectedMember(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const freshMember = await apiFetch<Member>(
+          `/api/members/${Number(memberId)}/?refresh=${Date.now()}`
+        );
+        if (cancelled) return;
+        setSelectedMember(freshMember);
+        setMembers((prev) => prev.map((m) => (m.id === freshMember.id ? freshMember : m)));
+      } catch {
+        // Keep existing member data if silent refresh fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberId]);
+
+  const selected = selectedMember ?? members.find((m) => m.id === memberId) ?? null;
   const isActiveMember =
     selected?.membership_status?.toLowerCase() === "active";
   const accountBalance = toNumber(selected?.account_balance);
@@ -142,6 +175,7 @@ export default function MembershipPage() {
       });
       setAssignSuccess("Membership assigned. Plan and dates were updated.");
       await loadMembers({ silent: true });
+      await fetchMemberDetail(Number(memberId));
     } catch (err) {
       setAssignError(
         err instanceof Error ? err.message : "Could not assign membership."
@@ -153,7 +187,7 @@ export default function MembershipPage() {
 
   async function onRenew(e: FormEvent) {
     e.preventDefault();
-    if (!memberId) return;
+    if (!memberId || renewalBlocked) return;
     setRenewError(null);
     setRenewSuccess(null);
     setAssignSuccess(null);
@@ -163,6 +197,7 @@ export default function MembershipPage() {
       await renewMember(Number(memberId), renewPlan || undefined);
       setRenewSuccess("Membership renewed. End date was extended.");
       await loadMembers({ silent: true });
+      await fetchMemberDetail(Number(memberId));
     } catch (err) {
       setRenewError(
         err instanceof Error ? err.message : "Could not renew membership."
@@ -202,24 +237,46 @@ export default function MembershipPage() {
         </div>
         {selected && (
           <div
-            className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)]/80 bg-[var(--surface-soft)]/80 px-3 py-2.5 text-sm"
+            className="rounded-lg border border-[var(--border)]/80 bg-[var(--surface-soft)]/80 px-3 py-2.5 text-sm"
             aria-live="polite"
           >
-            <span className="text-[var(--muted)]">Selected:</span>
-            <span className="font-medium text-[var(--foreground)]">
-              {selected.full_name}
-            </span>
-            <span className="hidden sm:inline text-[var(--border)]">·</span>
-            <span
-              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusBadgeClass[selected.membership_status]}`}
-            >
-              {membershipStatusLabel(selected.membership_status)}
-            </span>
-            <span className="text-[var(--muted)]">
-              <span className="text-[var(--foreground)]">{selected.plan}</span>
-              {" · "}
-              ends {formatIsoDate(selected.end_date)}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[var(--muted)]">Selected:</span>
+              <span className="font-medium text-[var(--foreground)]">
+                {selected.full_name}
+              </span>
+              <span className="hidden sm:inline text-[var(--border)]">·</span>
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusBadgeClass[selected.membership_status]}`}
+              >
+                {membershipStatusLabel(selected.membership_status)}
+              </span>
+              <span className="text-[var(--muted)]">
+                <span className="text-[var(--foreground)]">{selected.plan}</span>
+                {" · "}
+                ends {formatIsoDate(selected.end_date)}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center gap-2 border-t border-[var(--border)]/70 pt-2">
+              <span className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+                Balance
+              </span>
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                  accountBalance > 0
+                    ? "border-emerald-500/40 bg-emerald-500/12 text-emerald-200"
+                    : accountBalance < 0
+                      ? "border-rose-500/40 bg-rose-500/12 text-rose-200"
+                      : "border-[var(--border)] bg-[var(--background)]/60 text-[var(--muted)]"
+                }`}
+              >
+                {accountBalance > 0
+                  ? `Credit $${selected.account_balance}`
+                  : accountBalance < 0
+                    ? `Owes $${Math.abs(accountBalance).toFixed(2)}`
+                    : "Settled"}
+              </span>
+            </div>
           </div>
         )}
       </header>
@@ -335,6 +392,60 @@ export default function MembershipPage() {
               </div>
             ) : null}
           </section>
+
+          {selected ? (
+            <section className={cardClass} aria-labelledby="financial-summary-heading">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Ledger snapshot
+                  </p>
+                  <h2
+                    id="financial-summary-heading"
+                    className="mt-1 text-lg font-semibold text-[var(--foreground)]"
+                  >
+                    Financial summary
+                  </h2>
+                </div>
+                <span
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                    accountBalance > 0
+                      ? "border-emerald-500/40 bg-emerald-500/12 text-emerald-200"
+                      : accountBalance < 0
+                        ? "border-rose-500/40 bg-rose-500/12 text-rose-200"
+                        : "border-[var(--border)] bg-[var(--background)]/60 text-[var(--muted)]"
+                  }`}
+                >
+                  {accountBalance > 0
+                    ? `Credit $${selected.account_balance}`
+                    : accountBalance < 0
+                      ? `Owes $${Math.abs(accountBalance).toFixed(2)}`
+                      : "Settled"}
+                </span>
+              </div>
+
+              <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-[var(--border)]/70 bg-[var(--background)]/35 p-3">
+                  <dt className="text-xs text-[var(--muted)]">Account balance</dt>
+                  <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">
+                    ${Math.abs(accountBalance).toFixed(2)}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-[var(--border)]/70 bg-[var(--background)]/35 p-3">
+                  <dt className="text-xs text-[var(--muted)]">Total paid</dt>
+                  <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">
+                    ${selected.total_paid}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-[var(--border)]/70 bg-[var(--background)]/35 p-3">
+                  <dt className="text-xs text-[var(--muted)]">Outstanding amount</dt>
+                  <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">
+                    ${selected.outstanding_amount}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          ) : null}
 
           <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
             {isActiveMember ? (
@@ -481,6 +592,13 @@ export default function MembershipPage() {
                   their current end date. If expired, coverage starts from
                   today.
                 </p>
+                {renewalBlocked && (
+                  <div className="mt-3">
+                    <Alert type="error">
+                      Renewal is blocked because this account has a negative balance.
+                    </Alert>
+                  </div>
+                )}
               </div>
 
               {renewError && (

@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.db.models import CharField, Count, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Concat
 from django.utils import timezone
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
 from rest_framework.permissions import IsAdminUser
@@ -11,10 +11,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from .finance import member_financial_summary
 from .models import (
     AttendanceCheckin,
     GymSetting,
     Member,
+    MemberCharge,
     MemberNote,
     MembershipHistory,
     Payment,
@@ -25,6 +27,8 @@ from .serializers import (
     AssignMembershipSerializer,
     AttendanceCheckinSerializer,
     GymSettingSerializer,
+    MemberChargeSerializer,
+    MemberChargeWriteSerializer,
     MemberSerializer,
     MemberNoteSerializer,
     MemberWriteSerializer,
@@ -35,7 +39,6 @@ from .serializers import (
     QuickCheckinSerializer,
     RenewMembershipSerializer,
 )
-from .finance import member_financial_summary
 
 
 class AdminTokenObtainPairView(TokenObtainPairView):
@@ -245,9 +248,10 @@ class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
             if summary["account_balance"] < 0:
                 return Response(
                     {
+                        "detail": "Cannot renew membership while account balance is negative.",
                         "error": "Cannot renew membership. Member has outstanding balance.",
-                        "outstanding_amount": str(summary["outstanding_amount"]),
-                        "account_balance": str(summary["account_balance"]),
+                        "outstanding_amount": summary["outstanding_amount"],
+                        "account_balance": summary["account_balance"],
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -278,6 +282,45 @@ class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
         _record_membership_history(member, MembershipHistory.Event.UPDATED)
         data = _member_for_response(member.pk, self.get_serializer_context())
         return Response(data)
+
+    @action(detail=True, methods=["get", "post"], url_path="charges")
+    def charges(self, request, pk=None):
+        member = self.get_object()
+        if request.method == "GET":
+            ser = MemberChargeSerializer(
+                member.charges.all(), many=True, context=self.get_serializer_context()
+            )
+            return Response(ser.data)
+        write = MemberChargeWriteSerializer(data=request.data)
+        write.is_valid(raise_exception=True)
+        charge = MemberCharge.objects.create(member=member, **write.validated_data)
+        out = MemberChargeSerializer(charge, context=self.get_serializer_context())
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
+
+class MemberChargeViewSet(
+    OptionalPaginationMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    permission_classes = [IsAdminUser]
+    queryset = MemberCharge.objects.select_related("member")
+    serializer_class = MemberChargeSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_serializer_class(self):
+        if self.action in ("partial_update", "update"):
+            return MemberChargeWriteSerializer
+        return MemberChargeSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        member_id = self.request.query_params.get("member")
+        if member_id:
+            qs = qs.filter(member_id=member_id)
+        return qs.order_by("-created_at")
 
 
 class PaymentViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
@@ -494,7 +537,12 @@ class DashboardView(APIView):
         )
         new_members_this_month = members.filter(created_at__date__gte=month_start).count()
         unpaid_balance = (
-            Payment.objects.filter(status__in=[Payment.Status.PENDING, Payment.Status.OVERDUE])
+            MemberCharge.objects.filter(
+                status__in=(
+                    MemberCharge.Status.UNPAID,
+                    MemberCharge.Status.PARTIALLY_PAID,
+                )
+            )
             .aggregate(total=Sum("amount"))["total"]
             or 0
         )

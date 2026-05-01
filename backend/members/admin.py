@@ -4,6 +4,7 @@ from .models import (
     AttendanceCheckin,
     GymSetting,
     Member,
+    MemberCharge,
     MemberNote,
     MembershipHistory,
     Payment,
@@ -33,6 +34,14 @@ class MemberAdmin(admin.ModelAdmin):
     search_fields = ("id_number", "first_name", "last_name", "email", "phone")
     readonly_fields = ("id_number",)
     inlines = [PaymentInline]
+
+
+@admin.register(MemberCharge)
+class MemberChargeAdmin(admin.ModelAdmin):
+    list_display = ("member", "title", "amount", "status", "due_date", "created_at")
+    list_filter = ("status", "purpose")
+    search_fields = ("title", "member__id_number", "member__first_name", "member__last_name")
+    autocomplete_fields = ("member",)
 
 
 @admin.register(Payment)

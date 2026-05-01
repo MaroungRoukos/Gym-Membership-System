@@ -5,6 +5,7 @@ from .views import (
     AttendanceCheckinViewSet,
     DashboardView,
     GymSettingView,
+    MemberChargeViewSet,
     MemberNoteViewSet,
     MemberViewSet,
     MembershipHistoryViewSet,
@@ -15,6 +16,7 @@ from .views import (
 router = DefaultRouter()
 router.register("members", MemberViewSet, basename="member")
 router.register("payments", PaymentViewSet, basename="payment")
+router.register("member-charges", MemberChargeViewSet, basename="member-charge")
 router.register("member-notes", MemberNoteViewSet, basename="member-note")
 router.register("membership-history", MembershipHistoryViewSet, basename="membership-history")
 router.register("checkins", AttendanceCheckinViewSet, basename="checkin")

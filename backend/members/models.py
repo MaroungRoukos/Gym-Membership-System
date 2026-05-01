@@ -186,6 +186,52 @@ class MemberNote(models.Model):
         ordering = ["-created_at"]
 
 
+class MemberCharge(models.Model):
+    class Purpose(models.TextChoices):
+        MEMBERSHIP = "membership", "Membership payment"
+        REGISTRATION = "registration", "Registration fee"
+        PERSONAL_TRAINING = "personal_training", "Personal training"
+        MERCHANDISE = "merchandise", "Product / merchandise"
+        PENALTY = "penalty", "Penalty / late fee"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        UNPAID = "unpaid", "Unpaid"
+        PARTIALLY_PAID = "partially_paid", "Partially paid"
+        PAID = "paid", "Paid"
+        WAIVED = "waived", "Waived"
+        CANCELLED = "cancelled", "Cancelled"
+
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name="charges",
+    )
+    title = models.CharField(max_length=160)
+    purpose = models.CharField(max_length=32, choices=Purpose.choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.UNPAID,
+        db_index=True,
+    )
+    due_date = models.DateField(null=True, blank=True, db_index=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["member", "status"]),
+            models.Index(fields=["member", "due_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.member_id} {self.title} {self.amount} {self.status}"
+
+
 class MembershipHistory(models.Model):
     class Event(models.TextChoices):
         CREATED = "created", "Created"

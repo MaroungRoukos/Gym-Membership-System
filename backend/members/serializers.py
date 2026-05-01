@@ -7,6 +7,7 @@ from .models import (
     AttendanceCheckin,
     GymSetting,
     Member,
+    MemberCharge,
     MemberNote,
     MembershipHistory,
     Payment,
@@ -35,6 +36,7 @@ class MemberSerializer(serializers.ModelSerializer):
     total_charged = serializers.SerializerMethodField(read_only=True)
     outstanding_amount = serializers.SerializerMethodField(read_only=True)
     account_balance = serializers.SerializerMethodField(read_only=True)
+    balance_status = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Member
@@ -59,6 +61,7 @@ class MemberSerializer(serializers.ModelSerializer):
             "total_charged",
             "outstanding_amount",
             "account_balance",
+            "balance_status",
             "created_at",
             "updated_at",
         )
@@ -89,7 +92,7 @@ class MemberSerializer(serializers.ModelSerializer):
         p = obj.payments.order_by("-created_at").first()
         return p.status if p else None
 
-    def _financial(self, obj):
+    def _financial_summary(self, obj):
         summary = getattr(obj, "_financial_summary", None)
         if summary is None:
             summary = member_financial_summary(obj.id)
@@ -97,16 +100,19 @@ class MemberSerializer(serializers.ModelSerializer):
         return summary
 
     def get_total_paid(self, obj):
-        return str(self._financial(obj)["total_paid"])
+        return self._financial_summary(obj)["total_paid"]
 
     def get_total_charged(self, obj):
-        return str(self._financial(obj)["total_charged"])
+        return self._financial_summary(obj)["total_charged"]
 
     def get_outstanding_amount(self, obj):
-        return str(self._financial(obj)["outstanding_amount"])
+        return self._financial_summary(obj)["outstanding_amount"]
 
     def get_account_balance(self, obj):
-        return str(self._financial(obj)["account_balance"])
+        return self._financial_summary(obj)["account_balance"]
+
+    def get_balance_status(self, obj):
+        return self._financial_summary(obj)["balance_status"]
 
 
 class MemberWriteSerializer(serializers.ModelSerializer):
@@ -350,6 +356,35 @@ class PaymentUpdateSerializer(serializers.ModelSerializer):
         if new_status == Payment.Status.PAID and not instance.paid_at:
             instance.paid_at = timezone.now()
         return super().update(instance, validated_data)
+
+
+class MemberChargeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MemberCharge
+        fields = (
+            "id",
+            "member",
+            "title",
+            "purpose",
+            "amount",
+            "status",
+            "due_date",
+            "notes",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "member", "created_at", "updated_at")
+
+
+class MemberChargeWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MemberCharge
+        fields = ("title", "purpose", "amount", "status", "due_date", "notes")
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
 
 
 class MemberNoteSerializer(serializers.ModelSerializer):

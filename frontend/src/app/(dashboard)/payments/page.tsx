@@ -299,6 +299,7 @@ export default function PaymentsPage() {
         member: selectedMember.id,
         amount,
         purpose,
+        status: status === "paid" ? "paid" : "pending",
         mark_as_paid: status === "paid",
         method,
         payment_date: paymentDate,

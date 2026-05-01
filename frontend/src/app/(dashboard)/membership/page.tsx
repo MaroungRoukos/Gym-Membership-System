@@ -106,10 +106,12 @@ export default function MembershipPage() {
   }, [memberId]);
 
   const selected = members.find((m) => m.id === memberId) ?? null;
+  const isActiveMember =
+    selected?.membership_status?.toLowerCase() === "active";
 
   async function onAssign(e: FormEvent) {
     e.preventDefault();
-    if (!memberId) return;
+    if (!memberId || isActiveMember) return;
     setAssignError(null);
     setAssignSuccess(null);
     setRenewSuccess(null);
@@ -285,14 +287,13 @@ export default function MembershipPage() {
           </section>
 
           <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
-            <form
-              onSubmit={onAssign}
-              className={`${cardClass} flex flex-col border-l-4 border-l-[var(--accent)]/70`}
-              aria-labelledby="assign-heading"
-            >
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            {isActiveMember ? (
+              <section
+                className={`${cardClass} flex flex-col border-l-4 border-l-[var(--accent)]/35`}
+                aria-labelledby="assign-heading"
+              >
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
                     New period
                   </p>
                   <h2
@@ -301,80 +302,110 @@ export default function MembershipPage() {
                   >
                     Assign membership
                   </h2>
-                  <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
-                    Sets the member&apos;s plan and start date. The server
-                    calculates the end date from the plan (monthly, quarterly,
-                    etc.)—you normally do not set the end date here.
+                </div>
+                <div className="mt-4 rounded-lg border border-[var(--border)]/70 bg-[var(--background)]/35 p-4">
+                  <p className="text-sm text-[var(--foreground)]">
+                    This member already has an active membership. Use Renew
+                    membership to extend their current plan.
                   </p>
                 </div>
-              </div>
-
-              {assignError && (
-                <div className="mb-4" role="alert">
-                  <Alert type="error">{assignError}</Alert>
-                </div>
-              )}
-              {assignSuccess && (
-                <div className="mb-4" role="status">
-                  <Alert type="success">{assignSuccess}</Alert>
-                </div>
-              )}
-
-              <div className="flex flex-1 flex-col gap-4">
-                <div>
-                  <label
-                    htmlFor="assign-plan"
-                    className="text-xs font-medium text-[var(--muted)]"
-                  >
-                    Plan
-                  </label>
-                  <select
-                    id="assign-plan"
-                    className={planSelectClass}
-                    value={assignPlan}
-                    onChange={(e) => setAssignPlan(e.target.value as MemberPlan)}
-                  >
-                    {PLANS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label
-                    className="text-xs font-medium text-[var(--muted)]"
-                    htmlFor="assign-start-date"
-                  >
-                    Start date
-                  </label>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    Use the calendar control in the field. The end date is
-                    derived from this start date and the plan you select above.
-                  </p>
-                  <div className="mt-1.5">
-                    <DateInputWithCalendarButton
-                      id="assign-start-date"
-                      required
-                      value={assignStart}
-                      onChange={(e) => setAssignStart(e.target.value)}
-                      showPickerButton={false}
-                      inputClassName="min-h-[42px]"
-                    />
+              </section>
+            ) : (
+              <form
+                onSubmit={onAssign}
+                className={`${cardClass} flex flex-col border-l-4 border-l-[var(--accent)]/70`}
+                aria-labelledby="assign-heading"
+              >
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+                      New period
+                    </p>
+                    <h2
+                      id="assign-heading"
+                      className="mt-1 text-lg font-semibold text-[var(--foreground)]"
+                    >
+                      Assign membership
+                    </h2>
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+                      Sets the member&apos;s plan and start date. The server
+                      calculates the end date from the plan (monthly,
+                      quarterly, etc.)—you normally do not set the end date
+                      here.
+                    </p>
                   </div>
                 </div>
-                <div className="mt-auto pt-1">
-                  <button
-                    type="submit"
-                    disabled={assignLoading || !memberId}
-                    aria-busy={assignLoading}
-                    className="w-full rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                  >
-                    {assignLoading ? "Assigning…" : "Assign membership"}
-                  </button>
+
+                {assignError && (
+                  <div className="mb-4" role="alert">
+                    <Alert type="error">{assignError}</Alert>
+                  </div>
+                )}
+                {assignSuccess && (
+                  <div className="mb-4" role="status">
+                    <Alert type="success">{assignSuccess}</Alert>
+                  </div>
+                )}
+
+                <div className="flex flex-1 flex-col gap-4">
+                  <div>
+                    <label
+                      htmlFor="assign-plan"
+                      className="text-xs font-medium text-[var(--muted)]"
+                    >
+                      Plan
+                    </label>
+                    <select
+                      id="assign-plan"
+                      className={planSelectClass}
+                      value={assignPlan}
+                      onChange={(e) =>
+                        setAssignPlan(e.target.value as MemberPlan)
+                      }
+                    >
+                      {PLANS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      className="text-xs font-medium text-[var(--muted)]"
+                      htmlFor="assign-start-date"
+                    >
+                      Start date
+                    </label>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      Use the calendar control in the field. The end date is
+                      derived from this start date and the plan you select
+                      above.
+                    </p>
+                    <div className="mt-1.5">
+                      <DateInputWithCalendarButton
+                        id="assign-start-date"
+                        required
+                        value={assignStart}
+                        onChange={(e) => setAssignStart(e.target.value)}
+                        showPickerButton={false}
+                        inputClassName="min-h-[42px]"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-auto pt-1">
+                    <button
+                      type="submit"
+                      disabled={assignLoading || !memberId}
+                      aria-busy={assignLoading}
+                      className="w-full rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                    >
+                      {assignLoading ? "Assigning…" : "Assign membership"}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
+            )}
 
             <form
               onSubmit={onRenew}

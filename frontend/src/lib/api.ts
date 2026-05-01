@@ -72,6 +72,10 @@ export type Member = {
   end_date: string;
   membership_status: MembershipStatus;
   latest_payment_status: PaymentStatus | null;
+  total_paid: string;
+  total_charged: string;
+  outstanding_amount: string;
+  account_balance: string;
   created_at: string;
   updated_at: string;
 };
@@ -315,8 +319,14 @@ export async function deleteMember(id: number) {
   return apiFetch<void>(`/api/members/${id}/`, { method: "DELETE" });
 }
 
-export async function renewMember(id: number, plan?: MemberPlan) {
-  const body = plan ? { plan } : {};
+export async function renewMember(
+  id: number,
+  plan?: MemberPlan,
+  options?: { force_renew?: boolean }
+) {
+  const body: Record<string, unknown> = {};
+  if (plan) body.plan = plan;
+  if (options?.force_renew) body.force_renew = true;
   return apiFetch<Member>(`/api/members/${id}/renew/`, {
     method: "POST",
     body: JSON.stringify(body),

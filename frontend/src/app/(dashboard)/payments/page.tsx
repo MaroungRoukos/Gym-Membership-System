@@ -14,6 +14,7 @@ import {
   createPayment,
   fetchPayments,
   fetchPaymentsPage,
+  fetchMember,
   membersQuery,
   updatePayment,
   type Member,
@@ -142,6 +143,7 @@ export default function PaymentsPage() {
     () => searchParams.get("payment_date_to") || ""
   );
   const [createdPayment, setCreatedPayment] = useState<Payment | null>(null);
+  const [balanceClearedMemberId, setBalanceClearedMemberId] = useState<number | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
 
   const loadMembers = useCallback(async () => {
@@ -288,7 +290,11 @@ export default function PaymentsPage() {
     setSuccess(null);
     setPostSaveRenewMemberId(null);
     setCreatedPayment(null);
+    setBalanceClearedMemberId(null);
     try {
+      const beforeBalance = selectedMember.account_balance
+        ? Number(selectedMember.account_balance)
+        : 0;
       const created = await createPayment({
         member: selectedMember.id,
         amount,
@@ -317,6 +323,12 @@ export default function PaymentsPage() {
       if (isMembershipExpired(selectedMember.membership_status)) {
         setPostSaveRenewMemberId(selectedMember.id);
       }
+      const refreshedMember = await fetchMember(selectedMember.id);
+      setSelectedMember(refreshedMember);
+      if (beforeBalance < 0 && Number(refreshedMember.account_balance || "0") >= 0) {
+        setBalanceClearedMemberId(selectedMember.id);
+      }
+      await loadMembers();
       await loadMemberRecentPayments(selectedMember.id);
       await loadStatusCounts();
       await loadPayments();
@@ -366,6 +378,9 @@ export default function PaymentsPage() {
       })
       .slice(0, 12);
   }, [memberSearch, members]);
+  const selectedAccountBalance = selectedMember?.account_balance
+    ? Number(selectedMember.account_balance)
+    : 0;
 
   const hasActiveFilters =
     filterMember !== "" ||
@@ -534,6 +549,13 @@ export default function PaymentsPage() {
                   ) : null}
                 </div>
               )}
+              {selectedAccountBalance < 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                  <span>
+                    This member owes ${Math.abs(selectedAccountBalance).toFixed(2)}. Renewal is currently blocked.
+                  </span>
+                </div>
+              ) : null}
 
               {createdPayment && (
                 <div className="space-y-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4">
@@ -578,6 +600,17 @@ export default function PaymentsPage() {
                   </div>
                 </div>
               )}
+              {balanceClearedMemberId ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+                  <span>Balance cleared. You can now renew membership.</span>
+                  <Link
+                    href={`/membership?member=${balanceClearedMemberId}`}
+                    className="rounded-md border border-emerald-300/35 px-2.5 py-1 text-xs font-medium text-emerald-100 hover:bg-emerald-400/10"
+                  >
+                    Renew membership
+                  </Link>
+                </div>
+              ) : null}
 
               <p className="text-sm text-[var(--muted)]">
                 Invoice preview #{" "}

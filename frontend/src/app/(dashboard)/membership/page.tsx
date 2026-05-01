@@ -42,6 +42,11 @@ function membershipStatusLabel(status: MembershipStatus) {
   return status.replace(/_/g, " ");
 }
 
+function toNumber(value: string | undefined) {
+  const n = Number(value ?? "0");
+  return Number.isFinite(n) ? n : 0;
+}
+
 const statusBadgeClass: Record<MembershipStatus, string> = {
   active:
     "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 ring-1 ring-inset ring-emerald-500/20",
@@ -118,6 +123,9 @@ export default function MembershipPage() {
   const selected = members.find((m) => m.id === memberId) ?? null;
   const isActiveMember =
     selected?.membership_status?.toLowerCase() === "active";
+  const accountBalance = toNumber(selected?.account_balance);
+  const outstandingAmount = toNumber(selected?.outstanding_amount);
+  const renewalBlocked = !!selected && accountBalance < 0;
 
   async function onAssign(e: FormEvent) {
     e.preventDefault();
@@ -159,6 +167,22 @@ export default function MembershipPage() {
       setRenewError(
         err instanceof Error ? err.message : "Could not renew membership."
       );
+    } finally {
+      setRenewLoading(false);
+    }
+  }
+
+  async function onForceRenew() {
+    if (!memberId) return;
+    setRenewError(null);
+    setRenewSuccess(null);
+    setRenewLoading(true);
+    try {
+      await renewMember(Number(memberId), renewPlan || undefined, { force_renew: true });
+      setRenewSuccess("Membership renewed with override.");
+      await loadMembers({ silent: true });
+    } catch (err) {
+      setRenewError(err instanceof Error ? err.message : "Could not force renew membership.");
     } finally {
       setRenewLoading(false);
     }
@@ -289,6 +313,22 @@ export default function MembershipPage() {
                     </dt>
                     <dd className="mt-0.5 text-sm text-[var(--foreground)]">
                       {formatIsoDate(selected.end_date)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Outstanding</dt>
+                    <dd className="mt-0.5 text-sm text-[var(--foreground)]">
+                      ${outstandingAmount.toFixed(2)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Account balance</dt>
+                    <dd
+                      className={`mt-0.5 text-sm ${
+                        accountBalance < 0 ? "text-amber-200" : "text-emerald-200"
+                      }`}
+                    >
+                      ${accountBalance.toFixed(2)}
                     </dd>
                   </div>
                 </dl>
@@ -455,6 +495,20 @@ export default function MembershipPage() {
               )}
 
               <div className="flex flex-1 flex-col gap-4">
+                {renewalBlocked && selected ? (
+                  <div className="rounded-lg border-l-2 border-amber-400 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                    This member has an outstanding balance of $
+                    {Math.abs(accountBalance).toFixed(2)}. Please record payment before renewing.
+                    <div className="mt-2">
+                      <Link
+                        href={`/payments?member=${selected.id}`}
+                        className="rounded-md border border-amber-300/35 px-2.5 py-1 text-xs font-medium text-amber-100 hover:bg-amber-400/10"
+                      >
+                        Record payment
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
                 <div>
                   <label
                     htmlFor="renew-plan"
@@ -489,14 +543,26 @@ export default function MembershipPage() {
                   </p>
                 </div>
                 <div className="mt-auto pt-1">
-                  <button
-                    type="submit"
-                    disabled={renewLoading || !memberId}
-                    aria-busy={renewLoading}
-                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)]/40 px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--muted)] hover:bg-[var(--background)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                  >
-                    {renewLoading ? "Renewing…" : "Renew membership"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      disabled={renewLoading || !memberId || renewalBlocked}
+                      aria-busy={renewLoading}
+                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)]/40 px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--muted)] hover:bg-[var(--background)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                    >
+                      {renewLoading ? "Renewing…" : "Renew membership"}
+                    </button>
+                    {renewalBlocked ? (
+                      <button
+                        type="button"
+                        onClick={onForceRenew}
+                        disabled={renewLoading || !memberId}
+                        className="w-full rounded-lg border border-amber-300/35 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/20 disabled:opacity-50 sm:w-auto"
+                      >
+                        Force renew
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </form>

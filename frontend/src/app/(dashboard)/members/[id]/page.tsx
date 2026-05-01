@@ -69,6 +69,11 @@ function planLabel(plan: MemberPlan) {
   return labels[plan];
 }
 
+function money(value: string | null | undefined) {
+  const n = Number(value ?? "0");
+  return Number.isFinite(n) ? n : 0;
+}
+
 function DataRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="grid grid-cols-1 border-b border-[var(--border)]/50 py-2.5 last:border-0 sm:grid-cols-[9.5rem_1fr] sm:items-start sm:gap-4 sm:py-2">
@@ -142,6 +147,9 @@ export default function MemberDetailsPage() {
     () => (member ? memberInitials(member) : ""),
     [member]
   );
+  const accountBalance = money(member?.account_balance);
+  const outstandingAmount = money(member?.outstanding_amount);
+  const renewalBlocked = !!member && accountBalance < 0;
 
   useEffect(() => {
     if (!Number.isFinite(id)) return;
@@ -316,6 +324,17 @@ export default function MemberDetailsPage() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:pt-1">
+              <Link
+                href={`/membership?member=${member.id}`}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                  renewalBlocked
+                    ? "pointer-events-none border border-amber-300/30 bg-amber-500/10 text-amber-100/70"
+                    : "border border-[var(--border)] bg-[var(--background)]/60 text-[var(--foreground)] hover:border-[var(--muted)] hover:bg-[var(--background)]"
+                }`}
+                aria-disabled={renewalBlocked}
+              >
+                Renew membership
+              </Link>
               {member.member_payment_status !== "paid" && (
                 <button
                   type="button"
@@ -341,6 +360,19 @@ export default function MemberDetailsPage() {
             </div>
           </div>
         </header>
+
+        {renewalBlocked ? (
+          <div className="mx-4 mt-3 rounded-md border-l-2 border-amber-400 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 sm:mx-5">
+            This member has an outstanding balance of ${Math.abs(accountBalance).toFixed(2)}.
+            Please record payment before renewing.
+            <Link
+              href={`/payments?member=${member.id}`}
+              className="ml-2 rounded-md border border-amber-300/35 px-2 py-1 text-xs font-medium hover:bg-amber-400/10"
+            >
+              Record payment
+            </Link>
+          </div>
+        ) : null}
 
         <div className="grid gap-3 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4">
           <Panel title="Contact & plan">
@@ -439,6 +471,18 @@ export default function MemberDetailsPage() {
                 value={
                   <span className="capitalize text-[0.8125rem]">
                     {member.latest_payment_status ?? "—"}
+                  </span>
+                }
+              />
+              <DataRow
+                label="Outstanding amount"
+                value={<span>${outstandingAmount.toFixed(2)}</span>}
+              />
+              <DataRow
+                label="Account balance"
+                value={
+                  <span className={accountBalance < 0 ? "text-amber-200" : "text-emerald-200"}>
+                    ${accountBalance.toFixed(2)}
                   </span>
                 }
               />

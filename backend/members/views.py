@@ -35,6 +35,7 @@ from .serializers import (
     QuickCheckinSerializer,
     RenewMembershipSerializer,
 )
+from .finance import member_financial_summary
 
 
 class AdminTokenObtainPairView(TokenObtainPairView):
@@ -237,6 +238,19 @@ class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="renew")
     def renew(self, request, pk=None):
         member = self.get_object()
+        raw_force_renew = request.data.get("force_renew", False)
+        force_renew = raw_force_renew in (True, "true", "True", 1, "1")
+        if not force_renew:
+            summary = member_financial_summary(member.id)
+            if summary["account_balance"] < 0:
+                return Response(
+                    {
+                        "error": "Cannot renew membership. Member has outstanding balance.",
+                        "outstanding_amount": str(summary["outstanding_amount"]),
+                        "account_balance": str(summary["account_balance"]),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         ser = RenewMembershipSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         ser.save(member=member)

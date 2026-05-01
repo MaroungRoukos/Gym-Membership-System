@@ -225,6 +225,101 @@ class PaymentApiTests(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class RenewalFinancialValidationTests(BaseAPITestCase):
+    def test_cannot_renew_with_debt(self):
+        self.authenticate_admin()
+        member = self.create_member(20)
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("100.00"),
+            status=Payment.Status.PENDING,
+            purpose=Payment.Purpose.MEMBERSHIP,
+            method=Payment.Method.CASH,
+            payment_date=timezone.localdate(),
+        )
+        response = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("outstanding_amount", response.data)
+
+    def test_can_renew_when_balance_zero(self):
+        self.authenticate_admin()
+        member = self.create_member(21)
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("50.00"),
+            status=Payment.Status.PENDING,
+            purpose=Payment.Purpose.MEMBERSHIP,
+            method=Payment.Method.CASH,
+            payment_date=timezone.localdate(),
+        )
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("50.00"),
+            status=Payment.Status.PAID,
+            purpose=Payment.Purpose.MEMBERSHIP,
+            method=Payment.Method.CASH,
+            payment_date=timezone.localdate(),
+        )
+        response = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_can_renew_when_balance_positive(self):
+        self.authenticate_admin()
+        member = self.create_member(22)
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("80.00"),
+            status=Payment.Status.PAID,
+            purpose=Payment.Purpose.OTHER,
+            method=Payment.Method.CARD,
+            payment_date=timezone.localdate(),
+        )
+        response = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_force_renew_bypasses_balance_check(self):
+        self.authenticate_admin()
+        member = self.create_member(23)
+        Payment.objects.create(
+            member=member,
+            amount=Decimal("120.00"),
+            status=Payment.Status.PENDING,
+            purpose=Payment.Purpose.MEMBERSHIP,
+            method=Payment.Method.CASH,
+            payment_date=timezone.localdate(),
+        )
+        response = self.client.post(
+            f"/api/members/{member.id}/renew/",
+            {"force_renew": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_payment_reduces_debt_and_enables_renewal(self):
+        self.authenticate_admin()
+        member = self.create_member(24)
+        pending = Payment.objects.create(
+            member=member,
+            amount=Decimal("60.00"),
+            status=Payment.Status.PENDING,
+            purpose=Payment.Purpose.MEMBERSHIP,
+            method=Payment.Method.CASH,
+            payment_date=timezone.localdate(),
+        )
+        blocked = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+
+        paid = self.client.patch(
+            f"/api/payments/{pending.id}/",
+            {"status": "paid"},
+            format="json",
+        )
+        self.assertEqual(paid.status_code, status.HTTP_200_OK)
+
+        allowed = self.client.post(f"/api/members/{member.id}/renew/", {}, format="json")
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+
+
 class CheckinApiTests(BaseAPITestCase):
     def test_checkins_list_supports_pagination(self):
         self.authenticate_admin()

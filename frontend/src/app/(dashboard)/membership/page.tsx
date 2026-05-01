@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
 import { DateInputWithCalendarButton } from "@/components/DateInputWithCalendarButton";
 import {
@@ -57,6 +58,8 @@ const cardClass =
   "rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6";
 
 export default function MembershipPage() {
+  const searchParams = useSearchParams();
+  const preferredMemberId = Number(searchParams.get("member") || "");
   const [members, setMembers] = useState<Member[]>([]);
   const [memberId, setMemberId] = useState<number | "">("");
   const [assignPlan, setAssignPlan] = useState<MemberPlan>("monthly");
@@ -74,7 +77,7 @@ export default function MembershipPage() {
   const [renewSuccess, setRenewSuccess] = useState<string | null>(null);
   const [renewError, setRenewError] = useState<string | null>(null);
 
-  async function loadMembers(opts?: { silent?: boolean }) {
+  const loadMembers = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
     if (!silent) setLoading(true);
     try {
@@ -85,6 +88,13 @@ export default function MembershipPage() {
         if (typeof prev === "number" && data.some((m) => m.id === prev)) {
           return prev;
         }
+        if (
+          Number.isFinite(preferredMemberId) &&
+          preferredMemberId > 0 &&
+          data.some((m) => m.id === preferredMemberId)
+        ) {
+          return preferredMemberId;
+        }
         return data.length ? data[0].id : "";
       });
     } catch (e) {
@@ -92,11 +102,11 @@ export default function MembershipPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }
+  }, [preferredMemberId]);
 
   useEffect(() => {
     loadMembers();
-  }, []);
+  }, [loadMembers]);
 
   useEffect(() => {
     setAssignSuccess(null);

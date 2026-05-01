@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import {
   apiFetch,
   createPayment,
+  fetchPayments,
   fetchPaymentsPage,
   membersQuery,
   updatePayment,
@@ -103,6 +104,13 @@ export default function PaymentsPage() {
   const [limit, setLimit] = useState(() => parsePageSize(searchParams.get("limit")));
   const [offset, setOffset] = useState(() => parseOffset(searchParams.get("offset")));
   const [totalCount, setTotalCount] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({
+    total: 0,
+    pending: 0,
+    paid: 0,
+    overdue: 0,
+    failed: 0,
+  });
   const [sortBy, setSortBy] = useState<SortOption>(() =>
     parseSortBy(searchParams.get("ordering"))
   );
@@ -160,6 +168,25 @@ export default function PaymentsPage() {
     }
   }, [filterMember, filterStatus, limit, offset, sortBy]);
 
+  const loadStatusCounts = useCallback(async () => {
+    try {
+      const allForContext = await fetchPayments({
+        member: filterMember || undefined,
+      });
+      const next = allForContext.reduce(
+        (acc, p) => {
+          acc.total += 1;
+          acc[p.status] += 1;
+          return acc;
+        },
+        { total: 0, pending: 0, paid: 0, overdue: 0, failed: 0 }
+      );
+      setStatusCounts(next);
+    } catch {
+      setStatusCounts({ total: 0, pending: 0, paid: 0, overdue: 0, failed: 0 });
+    }
+  }, [filterMember]);
+
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("limit", String(limit));
@@ -191,6 +218,10 @@ export default function PaymentsPage() {
   useEffect(() => {
     loadMembers();
   }, [loadMembers]);
+
+  useEffect(() => {
+    void loadStatusCounts();
+  }, [loadStatusCounts]);
 
   useEffect(() => {
     if (!memberId) {
@@ -236,6 +267,7 @@ export default function PaymentsPage() {
       if (memberId) {
         await loadMemberRecentPayments(Number(memberId));
       }
+      await loadStatusCounts();
       await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to record");
@@ -247,6 +279,7 @@ export default function PaymentsPage() {
   async function patchPayment(id: number, next: PaymentStatus) {
     try {
       await updatePayment(id, { status: next });
+      await loadStatusCounts();
       await loadPayments();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Update failed");
@@ -277,16 +310,6 @@ export default function PaymentsPage() {
       })
       .slice(0, 8);
   }, [memberSearch, members]);
-
-  const statusCounts = useMemo(() => {
-    return payments.reduce(
-      (acc, p) => {
-        acc[p.status] += 1;
-        return acc;
-      },
-      { pending: 0, paid: 0, overdue: 0, failed: 0 }
-    );
-  }, [payments]);
 
   const hasActiveFilters =
     filterMember !== "" || filterStatus !== "" || sortBy !== "-created_at";
@@ -561,7 +584,7 @@ export default function PaymentsPage() {
                 }`}
               >
                 <span className="block">All</span>
-                <span className="text-[var(--muted)]">{totalCount}</span>
+                <span className="text-[var(--muted)]">{statusCounts.total}</span>
               </button>
               {(["pending", "paid", "overdue", "failed"] as PaymentStatus[]).map((s) => (
                 <button

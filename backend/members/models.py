@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -83,6 +83,14 @@ class Member(models.Model):
 
 
 class Payment(models.Model):
+    class Purpose(models.TextChoices):
+        MEMBERSHIP = "membership", "Membership payment"
+        REGISTRATION = "registration", "Registration fee"
+        PERSONAL_TRAINING = "personal_training", "Personal training"
+        MERCHANDISE = "merchandise", "Product / merchandise"
+        PENALTY = "penalty", "Penalty / late fee"
+        OTHER = "other", "Other"
+
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         PAID = "paid", "Paid"
@@ -92,8 +100,9 @@ class Payment(models.Model):
     class Method(models.TextChoices):
         CASH = "cash", "Cash"
         CARD = "card", "Card"
-        TRANSFER = "transfer", "Bank transfer"
-        ONLINE = "online", "Online"
+        BANK_TRANSFER = "bank_transfer", "Bank transfer"
+        MOBILE_MONEY = "mobile_money", "Mobile money"
+        OTHER = "other", "Other"
 
     member = models.ForeignKey(
         Member,
@@ -101,6 +110,12 @@ class Payment(models.Model):
         related_name="payments",
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    purpose = models.CharField(
+        max_length=32,
+        choices=Purpose.choices,
+        default=Purpose.MEMBERSHIP,
+        db_index=True,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -112,9 +127,10 @@ class Payment(models.Model):
         choices=Method.choices,
         default=Method.CASH,
     )
+    payment_date = models.DateField(default=timezone.localdate, db_index=True)
     due_date = models.DateField(null=True, blank=True, db_index=True)
     invoice_number = models.CharField(max_length=64, blank=True, default="")
-    description = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True, default="")
     paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -140,18 +156,20 @@ class Payment(models.Model):
     def generate_invoice_number(cls, day=None) -> str:
         use_day = day or timezone.localdate()
         prefix = f"INV-{use_day:%Y%m%d}-"
-        latest = (
-            cls.objects.filter(invoice_number__startswith=prefix)
-            .order_by("-invoice_number")
-            .values_list("invoice_number", flat=True)
-            .first()
-        )
-        sequence = 0
-        if latest and latest.startswith(prefix):
-            suffix = latest[len(prefix) :]
-            if suffix.isdigit():
-                sequence = int(suffix)
-        return f"{prefix}{sequence + 1:04d}"
+        with transaction.atomic():
+            latest = (
+                cls.objects.select_for_update()
+                .filter(invoice_number__startswith=prefix)
+                .order_by("-invoice_number")
+                .values_list("invoice_number", flat=True)
+                .first()
+            )
+            sequence = 0
+            if latest and latest.startswith(prefix):
+                suffix = latest[len(prefix) :]
+                if suffix.isdigit():
+                    sequence = int(suffix)
+            return f"{prefix}{sequence + 1:04d}"
 
 
 class MemberNote(models.Model):

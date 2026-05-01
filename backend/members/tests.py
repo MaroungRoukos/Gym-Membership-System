@@ -191,9 +191,10 @@ class PaymentApiTests(BaseAPITestCase):
             {
                 "member": member.id,
                 "amount": "49.99",
-                "status": "pending",
+                "purpose": "membership",
                 "method": "cash",
-                "description": "Generated invoice test",
+                "payment_date": timezone.localdate().isoformat(),
+                "notes": "Generated invoice test",
             },
             format="json",
         )
@@ -204,25 +205,24 @@ class PaymentApiTests(BaseAPITestCase):
             r"^INV-\d{8}-\d{4}$",
         )
 
-    def test_create_payment_keeps_explicit_invoice_number_when_provided(self):
+    def test_create_payment_rejects_manual_overdue_status(self):
         self.authenticate_admin()
         member = self.create_member(2)
-        explicit_invoice = "INV-20260501-9999"
 
         response = self.client.post(
             "/api/payments/",
             {
                 "member": member.id,
                 "amount": "99.00",
-                "status": "pending",
+                "status": "overdue",
+                "purpose": "other",
                 "method": "card",
-                "invoice_number": explicit_invoice,
+                "payment_date": timezone.localdate().isoformat(),
             },
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["invoice_number"], explicit_invoice)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class CheckinApiTests(BaseAPITestCase):

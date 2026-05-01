@@ -275,11 +275,13 @@ class PaymentViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
             "id",
             "member_id",
             "amount",
+            "purpose",
             "status",
             "method",
+            "payment_date",
             "due_date",
             "invoice_number",
-            "description",
+            "notes",
             "paid_at",
             "created_at",
             "updated_at",
@@ -311,19 +313,44 @@ class PaymentViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
         qs = super().get_queryset()
         member_id = self.request.query_params.get("member")
         st = self.request.query_params.get("status")
+        search = (self.request.query_params.get("search") or "").strip()
+        payment_date_from = self.request.query_params.get("payment_date_from")
+        payment_date_to = self.request.query_params.get("payment_date_to")
         if member_id:
             qs = qs.filter(member_id=member_id)
+        if search:
+            qs = qs.filter(
+                Q(invoice_number__icontains=search)
+                | Q(member__id_number__icontains=search)
+                | Q(member__first_name__icontains=search)
+                | Q(member__last_name__icontains=search)
+            )
         if st in (
             Payment.Status.PENDING,
             Payment.Status.PAID,
             Payment.Status.FAILED,
             Payment.Status.OVERDUE,
         ):
-            qs = qs.filter(status=st)
+            if st == Payment.Status.OVERDUE:
+                today = timezone.localdate()
+                qs = qs.filter(
+                    Q(status=Payment.Status.OVERDUE)
+                    | Q(
+                        status=Payment.Status.PENDING,
+                        due_date__isnull=False,
+                        due_date__lt=today,
+                    )
+                )
+            else:
+                qs = qs.filter(status=st)
+        if payment_date_from:
+            qs = qs.filter(payment_date__gte=payment_date_from)
+        if payment_date_to:
+            qs = qs.filter(payment_date__lte=payment_date_to)
         return _apply_ordering(
             qs,
             self.request.query_params.get("ordering"),
-            {"created_at", "updated_at", "due_date", "amount", "status"},
+            {"created_at", "updated_at", "payment_date", "due_date", "amount", "status"},
             ("-created_at",),
         )
 

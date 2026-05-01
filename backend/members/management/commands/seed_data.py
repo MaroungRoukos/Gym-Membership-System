@@ -99,10 +99,27 @@ class Command(BaseCommand):
                     invoice_number=invoice_number,
                     defaults={
                         "amount": amount,
+                        "purpose": random.choice(
+                            [
+                                Payment.Purpose.MEMBERSHIP,
+                                Payment.Purpose.REGISTRATION,
+                                Payment.Purpose.PERSONAL_TRAINING,
+                                Payment.Purpose.MERCHANDISE,
+                                Payment.Purpose.PENALTY,
+                            ]
+                        ),
                         "status": payment_status,
-                        "method": random.choice([Payment.Method.CASH, Payment.Method.CARD, Payment.Method.TRANSFER]),
+                        "method": random.choice(
+                            [
+                                Payment.Method.CASH,
+                                Payment.Method.CARD,
+                                Payment.Method.BANK_TRANSFER,
+                                Payment.Method.MOBILE_MONEY,
+                            ]
+                        ),
+                        "payment_date": today - timedelta(days=random.randint(0, 30)),
                         "due_date": due_date,
-                        "description": "Seed payment",
+                        "notes": "Seed payment",
                         "paid_at": paid_at,
                     },
                 )

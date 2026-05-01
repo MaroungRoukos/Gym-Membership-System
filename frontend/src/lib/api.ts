@@ -41,7 +41,14 @@ export type MemberPlan =
   | "custom";
 export type MembershipStatus = "active" | "expired" | "not_active";
 export type PaymentStatus = "pending" | "paid" | "failed" | "overdue";
-export type PaymentMethod = "cash" | "card" | "transfer" | "online";
+export type PaymentMethod = "cash" | "card" | "bank_transfer" | "mobile_money" | "other";
+export type PaymentPurpose =
+  | "membership"
+  | "registration"
+  | "personal_training"
+  | "merchandise"
+  | "penalty"
+  | "other";
 
 /** Recorded enrollment/dues status on the member (see member_payment_status in API). */
 export type MemberPaymentStatus = "pending" | "paid";
@@ -75,11 +82,14 @@ export type Payment = {
   member_name: string;
   member_id_number: string;
   amount: string;
+  purpose: PaymentPurpose;
   status: PaymentStatus;
+  computed_status?: PaymentStatus;
   method: PaymentMethod;
+  payment_date: string;
   due_date: string | null;
   invoice_number: string;
-  description: string;
+  notes: string;
   paid_at: string | null;
   created_at: string;
   updated_at: string;
@@ -333,6 +343,9 @@ export async function markMemberPaid(id: number) {
 export function paymentsQuery(params: {
   member?: number;
   status?: PaymentStatus;
+  search?: string;
+  payment_date_from?: string;
+  payment_date_to?: string;
   limit?: number;
   offset?: number;
   ordering?: string;
@@ -340,6 +353,9 @@ export function paymentsQuery(params: {
   const q = new URLSearchParams();
   if (params.member) q.set("member", String(params.member));
   if (params.status) q.set("status", params.status);
+  if (params.search?.trim()) q.set("search", params.search.trim());
+  if (params.payment_date_from) q.set("payment_date_from", params.payment_date_from);
+  if (params.payment_date_to) q.set("payment_date_to", params.payment_date_to);
   if (typeof params.limit === "number") q.set("limit", String(params.limit));
   if (typeof params.offset === "number") q.set("offset", String(params.offset));
   if (params.ordering?.trim()) q.set("ordering", params.ordering.trim());
@@ -350,6 +366,9 @@ export function paymentsQuery(params: {
 export async function fetchPayments(params?: {
   member?: number;
   status?: PaymentStatus;
+  search?: string;
+  payment_date_from?: string;
+  payment_date_to?: string;
 }) {
   const path = paymentsQuery(params ?? {});
   return apiFetch<Payment[]>(path);
@@ -358,6 +377,9 @@ export async function fetchPayments(params?: {
 export async function fetchPaymentsPage(params?: {
   member?: number;
   status?: PaymentStatus;
+  search?: string;
+  payment_date_from?: string;
+  payment_date_to?: string;
   limit?: number;
   offset?: number;
   ordering?: string;
@@ -369,11 +391,12 @@ export async function fetchPaymentsPage(params?: {
 export async function createPayment(body: {
   member: number;
   amount: string;
-  status?: PaymentStatus;
+  purpose: PaymentPurpose;
+  mark_as_paid?: boolean;
   method?: PaymentMethod;
+  payment_date: string;
   due_date?: string | null;
-  invoice_number?: string;
-  description?: string;
+  notes?: string;
 }) {
   return apiFetch<Payment>("/api/payments/", {
     method: "POST",
@@ -386,10 +409,11 @@ export async function updatePayment(
   body: Partial<{
     amount: string;
     status: PaymentStatus;
+    purpose: PaymentPurpose;
     method: PaymentMethod;
+    payment_date: string;
     due_date: string | null;
-    invoice_number: string;
-    description: string;
+    notes: string;
   }>
 ) {
   return apiFetch<Payment>(`/api/payments/${id}/`, {

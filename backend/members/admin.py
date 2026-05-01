@@ -50,7 +50,7 @@ class PaymentAdmin(admin.ModelAdmin):
         "member__id_number",
         "member__first_name",
         "member__last_name",
-        "description",
+        "notes",
     )
 
 

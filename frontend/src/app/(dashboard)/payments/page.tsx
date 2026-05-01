@@ -17,6 +17,7 @@ import {
   membersQuery,
   updatePayment,
   type Member,
+  type PaymentPurpose,
   type PaymentMethod,
   type Payment,
   type PaymentStatus,
@@ -103,13 +104,14 @@ export default function PaymentsPage() {
     parseFilterStatus(searchParams.get("status"))
   );
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [purpose, setPurpose] = useState<PaymentPurpose>("membership");
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<PaymentStatus>("pending");
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [useTodayPaymentDate, setUseTodayPaymentDate] = useState(true);
   const [paymentDate, setPaymentDate] = useState(() => isoToday());
   const [dueDate, setDueDate] = useState("");
-  const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
   const [lastCreatedInvoice, setLastCreatedInvoice] = useState<string | null>(null);
   const [memberRecentPayments, setMemberRecentPayments] = useState<Payment[]>([]);
   const [recentPaymentsLoading, setRecentPaymentsLoading] = useState(false);
@@ -132,6 +134,14 @@ export default function PaymentsPage() {
   const [sortBy, setSortBy] = useState<SortOption>(() =>
     parseSortBy(searchParams.get("ordering"))
   );
+  const [filterSearch, setFilterSearch] = useState(() => searchParams.get("search") || "");
+  const [paymentDateFrom, setPaymentDateFrom] = useState(
+    () => searchParams.get("payment_date_from") || ""
+  );
+  const [paymentDateTo, setPaymentDateTo] = useState(
+    () => searchParams.get("payment_date_to") || ""
+  );
+  const [createdPayment, setCreatedPayment] = useState<Payment | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
 
   const loadMembers = useCallback(async () => {
@@ -167,6 +177,9 @@ export default function PaymentsPage() {
       const pData = await fetchPaymentsPage({
         member: filterMember || undefined,
         status: filterStatus || undefined,
+        search: filterSearch || undefined,
+        payment_date_from: paymentDateFrom || undefined,
+        payment_date_to: paymentDateTo || undefined,
         limit,
         offset,
         ordering: sortBy,
@@ -180,7 +193,7 @@ export default function PaymentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterMember, filterStatus, limit, offset, sortBy]);
+  }, [filterMember, filterStatus, filterSearch, paymentDateFrom, paymentDateTo, limit, offset, sortBy]);
 
   const loadStatusCounts = useCallback(async () => {
     try {
@@ -189,8 +202,9 @@ export default function PaymentsPage() {
       });
       const next = allForContext.reduce(
         (acc, p) => {
+          const effectiveStatus = p.computed_status || p.status;
           acc.total += 1;
-          acc[p.status] += 1;
+          acc[effectiveStatus] += 1;
           return acc;
         },
         { total: 0, pending: 0, paid: 0, overdue: 0, failed: 0 }
@@ -210,6 +224,12 @@ export default function PaymentsPage() {
     else params.delete("member");
     if (filterStatus) params.set("status", filterStatus);
     else params.delete("status");
+    if (filterSearch) params.set("search", filterSearch);
+    else params.delete("search");
+    if (paymentDateFrom) params.set("payment_date_from", paymentDateFrom);
+    else params.delete("payment_date_from");
+    if (paymentDateTo) params.set("payment_date_to", paymentDateTo);
+    else params.delete("payment_date_to");
     const next = params.toString();
     if (next !== searchParams.toString()) {
       router.replace(`${pathname}?${next}`, { scroll: false });
@@ -217,8 +237,11 @@ export default function PaymentsPage() {
   }, [
     filterMember,
     filterStatus,
+    filterSearch,
     limit,
     offset,
+    paymentDateFrom,
+    paymentDateTo,
     pathname,
     router,
     searchParams,
@@ -264,23 +287,28 @@ export default function PaymentsPage() {
     setError(null);
     setSuccess(null);
     setPostSaveRenewMemberId(null);
+    setCreatedPayment(null);
     try {
       const created = await createPayment({
         member: selectedMember.id,
         amount,
-        status,
+        purpose,
+        mark_as_paid: status === "paid",
         method,
+        payment_date: paymentDate,
         due_date: dueDate || null,
-        description,
-        // TODO: Backend currently keeps `paid_at` read-only and derives timestamps from server-side create/status flows.
-        // Keep using created_at behavior until API accepts an explicit payment date field.
+        notes,
       });
       setAmount("");
-      setDescription("");
+      setNotes("");
+      setPurpose("membership");
       setStatus("pending");
       setMethod("cash");
       setDueDate("");
+      setPaymentDate(isoToday());
+      setUseTodayPaymentDate(true);
       setLastCreatedInvoice(created.invoice_number || null);
+      setCreatedPayment(created);
       setSuccess(
         isMembershipExpired(selectedMember.membership_status)
           ? "Payment recorded. This member's membership is still inactive."
@@ -340,7 +368,12 @@ export default function PaymentsPage() {
   }, [memberSearch, members]);
 
   const hasActiveFilters =
-    filterMember !== "" || filterStatus !== "" || sortBy !== "-created_at";
+    filterMember !== "" ||
+    filterStatus !== "" ||
+    sortBy !== "-created_at" ||
+    filterSearch.trim() !== "" ||
+    paymentDateFrom !== "" ||
+    paymentDateTo !== "";
 
   const summaryText = (() => {
     const statusText = filterStatus ? `${filterStatus} payments` : "all payments";
@@ -372,7 +405,7 @@ export default function PaymentsPage() {
       {error && <Alert type="error">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr] xl:grid-cols-[460px_1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_1fr] xl:grid-cols-[380px_1fr]">
         <aside className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
           <h2 className="text-xl font-semibold">Find member</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
@@ -483,14 +516,13 @@ export default function PaymentsPage() {
 
               {isMembershipActive(selectedMember.membership_status) ? (
                 <div className="border-l-2 border-blue-500 pl-3 text-sm text-[var(--muted)]">
-                  This member already has an active membership. Recording a
-                  payment will NOT extend or change their membership.
+                  Membership access is active. This payment will be saved as a financial record only.
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-blue-500 pl-3 text-sm text-[var(--muted)]">
                   <span>
-                    This member&apos;s membership is not active. You may want to
-                    renew their membership after recording payment.
+                    This member&apos;s membership is not active. Recording a payment
+                    will NOT reactivate it.
                   </span>
                   {isMembershipExpired(selectedMember.membership_status) ? (
                     <Link
@@ -503,8 +535,52 @@ export default function PaymentsPage() {
                 </div>
               )}
 
+              {createdPayment && (
+                <div className="space-y-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+                  <h3 className="text-lg font-semibold text-emerald-100">Payment recorded</h3>
+                  <p className="text-sm text-emerald-100/90">
+                    This payment was saved as a financial record. Membership access was not changed.
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <Link
+                      href={`/membership?member=${createdPayment.member}`}
+                      className="rounded-md border border-emerald-300/35 px-3 py-1.5 text-emerald-100 hover:bg-emerald-400/10"
+                    >
+                      Renew membership
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatedPayment(null);
+                        amountInputRef.current?.focus();
+                      }}
+                      className="rounded-md border border-[var(--border)] px-3 py-1.5 text-[var(--muted)] hover:text-white"
+                    >
+                      Record another payment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterSearch(createdPayment.invoice_number);
+                        setOffset(0);
+                      }}
+                      className="rounded-md border border-[var(--border)] px-3 py-1.5 text-[var(--foreground)] hover:bg-white/5"
+                    >
+                      View invoice: {createdPayment.invoice_number}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreatedPayment(null)}
+                      className="rounded-md border border-[var(--border)] px-3 py-1.5 text-[var(--muted)] hover:text-white"
+                    >
+                      Back to payments
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <p className="text-sm text-[var(--muted)]">
-                Invoice #{" "}
+                Invoice preview #{" "}
                 <span className="rounded bg-[var(--muted)]/20 px-2 py-1 text-xs font-mono text-[var(--foreground)]">
                   {generatedInvoiceNumber}
                 </span>
@@ -520,6 +596,21 @@ export default function PaymentsPage() {
               </p>
 
               <div className="space-y-6">
+                <div>
+                  <label className="text-xs text-[var(--muted)]">Payment purpose</label>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value as PaymentPurpose)}
+                  >
+                    <option value="membership">Membership payment</option>
+                    <option value="registration">Registration fee</option>
+                    <option value="personal_training">Personal training</option>
+                    <option value="merchandise">Product / merchandise</option>
+                    <option value="penalty">Penalty / late fee</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
                 <div>
                   <label className="text-xs text-[var(--muted)]">Amount</label>
                   <div className="mt-1 flex items-center rounded-lg border border-[var(--accent)]/50 bg-[var(--background)] px-3">
@@ -562,18 +653,15 @@ export default function PaymentsPage() {
                   />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="text-xs text-[var(--muted)]">Status</label>
-                    <select
-                      className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 capitalize"
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value as PaymentStatus)}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="paid">Paid</option>
-                      <option value="failed">Failed</option>
-                      <option value="overdue">Overdue</option>
-                    </select>
+                  <div className="flex items-end">
+                    <label className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)]">
+                      <input
+                        type="checkbox"
+                        checked={status === "paid"}
+                        onChange={(e) => setStatus(e.target.checked ? "paid" : "pending")}
+                      />
+                      Mark as paid immediately
+                    </label>
                   </div>
                   <div>
                     <label className="text-xs text-[var(--muted)]">Method</label>
@@ -584,13 +672,14 @@ export default function PaymentsPage() {
                     >
                       <option value="cash">Cash</option>
                       <option value="card">Card</option>
-                      <option value="transfer">Bank transfer</option>
-                      <option value="online">Online</option>
+                      <option value="bank_transfer">Bank transfer</option>
+                      <option value="mobile_money">Mobile money</option>
+                      <option value="other">Other</option>
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--muted)]">Due date</label>
+                  <label className="text-xs text-[var(--muted)]">Due date (optional)</label>
                   <DateInputWithCalendarButton
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
@@ -598,11 +687,11 @@ export default function PaymentsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--muted)]">Description</label>
-                  <input
-                    className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                  <label className="text-xs text-[var(--muted)]">Notes</label>
+                  <textarea
+                    className="mt-1 min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                   />
                 </div>
                 <div className="flex justify-stretch sm:justify-end">
@@ -611,7 +700,7 @@ export default function PaymentsPage() {
                     disabled={!selectedMember || !amount || submitting}
                     className="w-full rounded-lg bg-[var(--accent)] px-5 py-2.5 text-white transition hover:brightness-110 disabled:opacity-50 sm:w-auto"
                   >
-                    {submitting ? "Saving…" : "Save payment"}
+                    {submitting ? "Saving…" : "Record payment"}
                   </button>
                 </div>
                 {postSaveRenewMemberId ? (
@@ -643,15 +732,18 @@ export default function PaymentsPage() {
                     {memberRecentPayments.slice(0, 5).map((p) => (
                       <div
                         key={p.id}
-                        className="grid grid-cols-4 gap-2 px-2 py-1 text-[var(--muted)]"
+                        className="grid grid-cols-5 gap-2 px-2 py-1 text-[var(--muted)]"
                       >
                         <span className="truncate font-mono text-xs text-[var(--foreground)]">
                           {p.invoice_number || "—"}
                         </span>
+                        <span className="text-xs capitalize">{p.purpose.replace(/_/g, " ")}</span>
                         <span className="tabular-nums text-sm">${p.amount}</span>
-                        <span className="capitalize text-[var(--muted)]">{p.status}</span>
+                        <span className="capitalize text-[var(--muted)]">
+                          {p.computed_status || p.status}
+                        </span>
                         <span className="text-[var(--muted)]">
-                          {new Date(p.created_at).toLocaleDateString()} · due {p.due_date ?? "—"}
+                          {new Date(p.payment_date || p.created_at).toLocaleDateString()}
                         </span>
                       </div>
                     ))}
@@ -665,6 +757,42 @@ export default function PaymentsPage() {
 
       <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
         <h2 className="font-medium">Payment history</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className="text-xs text-[var(--muted)]">Search member or invoice</label>
+            <input
+              value={filterSearch}
+              onChange={(e) => {
+                setFilterSearch(e.target.value);
+                setOffset(0);
+              }}
+              placeholder="Invoice # or member"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--muted)]">Payment date from</label>
+            <DateInputWithCalendarButton
+              value={paymentDateFrom}
+              onChange={(e) => {
+                setPaymentDateFrom(e.target.value);
+                setOffset(0);
+              }}
+              showPickerButton={false}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[var(--muted)]">Payment date to</label>
+            <DateInputWithCalendarButton
+              value={paymentDateTo}
+              onChange={(e) => {
+                setPaymentDateTo(e.target.value);
+                setOffset(0);
+              }}
+              showPickerButton={false}
+            />
+          </div>
+        </div>
         {selectedMember && (
           <div className="flex flex-wrap gap-2">
             <button
@@ -772,6 +900,9 @@ export default function PaymentsPage() {
               setFilterMember("");
               setFilterStatus("");
               setSortBy("-created_at");
+              setFilterSearch("");
+              setPaymentDateFrom("");
+              setPaymentDateTo("");
               setOffset(0);
             }}
             className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-white"
@@ -791,6 +922,7 @@ export default function PaymentsPage() {
                 <th className="px-4 py-2">When</th>
                 <th className="px-4 py-2">Member</th>
                 <th className="px-4 py-2">Amount</th>
+                <th className="px-4 py-2">Purpose</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">Method</th>
                 <th className="px-4 py-2">Due</th>
@@ -801,7 +933,7 @@ export default function PaymentsPage() {
               {payments.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-8"
                   >
                     <EmptyState
@@ -815,7 +947,7 @@ export default function PaymentsPage() {
                 payments.map((p) => (
                   <tr key={p.id} className="border-t border-white/10 hover:bg-white/[0.03]">
                     <td className="px-4 py-2 text-xs">
-                      {new Date(p.created_at).toLocaleString()}
+                      {new Date(p.payment_date || p.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2">
                       <Link
@@ -829,19 +961,27 @@ export default function PaymentsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2 tabular-nums">${p.amount}</td>
+                    <td className="px-4 py-2 capitalize">
+                      {p.purpose.replace(/_/g, " ")}
+                    </td>
                     <td className="px-4 py-2">
+                      {(() => {
+                        const currentStatus = p.computed_status || p.status;
+                        return (
                       <StatusBadge
-                        label={p.status}
+                        label={currentStatus}
                         tone={
-                          p.status === "paid"
+                          currentStatus === "paid"
                             ? "success"
-                            : p.status === "failed"
+                            : currentStatus === "failed"
                               ? "danger"
                               : "warning"
                         }
                       />
+                        );
+                      })()}
                     </td>
-                    <td className="px-4 py-2 capitalize">{p.method}</td>
+                    <td className="px-4 py-2 capitalize">{p.method.replace(/_/g, " ")}</td>
                     <td className="px-4 py-2">{p.due_date ?? "—"}</td>
                     <td className="px-4 py-2 space-x-2 text-xs">
                       {p.status !== "paid" && (

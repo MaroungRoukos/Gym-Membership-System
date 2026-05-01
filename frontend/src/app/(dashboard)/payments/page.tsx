@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
@@ -20,6 +20,8 @@ import {
   type PaymentStatus,
 } from "@/lib/api";
 
+type SortOption = "-created_at" | "created_at" | "-amount" | "amount" | "due_date";
+
 function parseFilterMember(raw: string | null): number | "" {
   if (!raw) return "";
   const value = Number(raw);
@@ -34,9 +36,17 @@ function parseFilterStatus(raw: string | null): PaymentStatus | "" {
   return "";
 }
 
-function parseSortBy(raw: string | null): "created_at" | "amount" | "due_date" {
-  if (raw === "amount" || raw === "due_date") return raw;
-  return "created_at";
+function parseSortBy(raw: string | null): SortOption {
+  if (
+    raw === "-created_at" ||
+    raw === "created_at" ||
+    raw === "-amount" ||
+    raw === "amount" ||
+    raw === "due_date"
+  ) {
+    return raw;
+  }
+  return "-created_at";
 }
 
 export default function PaymentsPage() {
@@ -58,6 +68,8 @@ export default function PaymentsPage() {
   const [dueDate, setDueDate] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [description, setDescription] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberSearchOpen, setMemberSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +77,7 @@ export default function PaymentsPage() {
   const [limit, setLimit] = useState(() => parsePageSize(searchParams.get("limit")));
   const [offset, setOffset] = useState(() => parseOffset(searchParams.get("offset")));
   const [totalCount, setTotalCount] = useState(0);
-  const [sortBy, setSortBy] = useState<"created_at" | "amount" | "due_date">(() =>
+  const [sortBy, setSortBy] = useState<SortOption>(() =>
     parseSortBy(searchParams.get("ordering"))
   );
 
@@ -87,14 +99,12 @@ export default function PaymentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const ordering =
-        sortBy === "created_at" ? "-created_at" : sortBy;
       const pData = await fetchPaymentsPage({
         member: filterMember || undefined,
         status: filterStatus || undefined,
         limit,
         offset,
-        ordering,
+        ordering: sortBy,
       });
       setPayments(pData.results);
       setTotalCount(pData.count);
@@ -108,11 +118,10 @@ export default function PaymentsPage() {
   }, [filterMember, filterStatus, limit, offset, sortBy]);
 
   useEffect(() => {
-    const ordering = sortBy === "created_at" ? "-created_at" : sortBy;
     const params = new URLSearchParams(searchParams.toString());
     params.set("limit", String(limit));
     params.set("offset", String(offset));
-    params.set("ordering", ordering);
+    params.set("ordering", sortBy);
     if (filterMember) params.set("member", String(filterMember));
     else params.delete("member");
     if (filterStatus) params.set("status", filterStatus);
@@ -185,6 +194,55 @@ export default function PaymentsPage() {
       alert(e instanceof Error ? e.message : "Update failed");
     }
   }
+
+  const selectedFilterMember =
+    members.find((m) => m.id === filterMember) ?? null;
+
+  const filteredMemberOptions = useMemo(() => {
+    const term = memberSearch.trim().toLowerCase();
+    if (!term) return members.slice(0, 8);
+    return members
+      .filter((m) => {
+        return (
+          m.full_name.toLowerCase().includes(term) ||
+          m.id_number.toLowerCase().includes(term) ||
+          m.phone.toLowerCase().includes(term)
+        );
+      })
+      .slice(0, 8);
+  }, [memberSearch, members]);
+
+  const statusCounts = useMemo(() => {
+    return payments.reduce(
+      (acc, p) => {
+        acc[p.status] += 1;
+        return acc;
+      },
+      { pending: 0, paid: 0, overdue: 0, failed: 0 }
+    );
+  }, [payments]);
+
+  const hasActiveFilters =
+    filterMember !== "" || filterStatus !== "" || sortBy !== "-created_at";
+
+  const summaryText = (() => {
+    const statusText = filterStatus ? `${filterStatus} payments` : "all payments";
+    const memberText = selectedFilterMember
+      ? ` for ${selectedFilterMember.full_name}`
+      : filterStatus
+        ? " for all members"
+        : "";
+    return `Showing ${statusText}${memberText}`;
+  })();
+
+  const sortLabelMap: Record<SortOption, string> = {
+    "-created_at": "Newest first",
+    "created_at": "Oldest first",
+    "-amount": "Amount high to low",
+    amount: "Amount low to high",
+    due_date: "Due date soonest",
+  };
+
   return (
     <div className="space-y-8">
       <PageHero
@@ -197,10 +255,10 @@ export default function PaymentsPage() {
       {error && <Alert type="error">{error}</Alert>}
       {success && <Alert type="success">{success}</Alert>}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         <form
           onSubmit={onRecord}
-          className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur"
+          className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:col-span-2"
         >
           <h2 className="font-medium">Record payment</h2>
           <div>
@@ -291,63 +349,138 @@ export default function PaymentsPage() {
           </button>
         </form>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-          <h2 className="font-medium">Filter history</h2>
-          <div className="mt-4 space-y-3">
+        <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+          <h2 className="font-medium">Payment history</h2>
+          <div>
+            <label className="text-xs text-[var(--muted)]">Search member</label>
+            <input
+              value={memberSearch}
+              onChange={(e) => {
+                setMemberSearch(e.target.value);
+                setMemberSearchOpen(true);
+              }}
+              onFocus={() => setMemberSearchOpen(true)}
+              placeholder="Name, member ID, or phone"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm"
+            />
+            {memberSearchOpen && filteredMemberOptions.length > 0 && (
+              <div className="mt-2 max-h-52 overflow-auto rounded-lg border border-white/10 bg-slate-950/95 p-1">
+                {filteredMemberOptions.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      setFilterMember(m.id);
+                      setOffset(0);
+                      setMemberSearchOpen(false);
+                      setMemberSearch("");
+                    }}
+                    className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-white/10"
+                  >
+                    <span className="block">{m.full_name}</span>
+                    <span className="block text-xs text-[var(--muted)]">
+                      {m.id_number} · {m.phone}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {selectedFilterMember && (
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)]/40 px-3 py-1 text-xs">
+              <span>
+                {selectedFilterMember.full_name} · {selectedFilterMember.id_number}
+              </span>
+              <button
+                type="button"
+                aria-label="Clear member filter"
+                onClick={() => {
+                  setFilterMember("");
+                  setOffset(0);
+                }}
+                className="text-[var(--muted)] hover:text-white"
+              >
+                x
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <p className="text-xs text-[var(--muted)]">Status</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterStatus("");
+                  setOffset(0);
+                }}
+                className={`rounded-lg border px-2.5 py-2 text-left text-xs ${
+                  filterStatus === ""
+                    ? "border-[var(--accent)] bg-[var(--accent)]/15"
+                    : "border-white/15 bg-slate-900/40"
+                }`}
+              >
+                <span className="block">All</span>
+                <span className="text-[var(--muted)]">{totalCount}</span>
+              </button>
+              {(["pending", "paid", "overdue", "failed"] as PaymentStatus[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    setFilterStatus(s);
+                    setOffset(0);
+                  }}
+                  className={`rounded-lg border px-2.5 py-2 text-left text-xs capitalize ${
+                    filterStatus === s
+                      ? "border-[var(--accent)] bg-[var(--accent)]/15"
+                      : "border-white/15 bg-slate-900/40"
+                  }`}
+                >
+                  <span className="block">{s}</span>
+                  <span className="text-[var(--muted)]">{statusCounts[s]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-[var(--muted)]">Sort</label>
             <div>
-              <label className="text-xs text-[var(--muted)]">Member</label>
               <select
                 className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2"
-                value={filterMember === "" ? "" : filterMember}
+                value={sortBy}
                 onChange={(e) => {
-                  setFilterMember(e.target.value ? Number(e.target.value) : "");
+                  setSortBy(e.target.value as SortOption);
                   setOffset(0);
                 }}
               >
-                <option value="">All members</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.full_name}
+                {Object.entries(sortLabelMap).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="text-xs text-[var(--muted)]">Status</label>
-              <select
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 capitalize"
-                value={filterStatus}
-                onChange={(e) => {
-                  setFilterStatus(
-                    e.target.value ? (e.target.value as PaymentStatus) : ""
-                  );
-                  setOffset(0);
-                }}
-              >
-                <option value="">All</option>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-                <option value="failed">Failed</option>
-                <option value="overdue">Overdue</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[var(--muted)]">Sort</label>
-              <select
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2"
-                value={sortBy}
-                onChange={(e) =>
-                  setSortBy(
-                    e.target.value as "created_at" | "amount" | "due_date"
-                  )
-                }
-              >
-                <option value="created_at">Newest first</option>
-                <option value="amount">Amount (low to high)</option>
-                <option value="due_date">Due date (old to new)</option>
-              </select>
-            </div>
           </div>
+
+          <p className="text-xs text-[var(--muted)]">{summaryText}</p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilterMember("");
+                setFilterStatus("");
+                setSortBy("-created_at");
+                setOffset(0);
+                setMemberSearch("");
+              }}
+              className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-white"
+            >
+              Reset filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -423,7 +556,7 @@ export default function PaymentsPage() {
                           Mark paid
                         </button>
                       )}
-                      {p.status !== "failed" && (
+                      {p.status !== "paid" && p.status !== "failed" && (
                         <button
                           type="button"
                           className="text-[var(--muted)] hover:underline"
@@ -432,7 +565,7 @@ export default function PaymentsPage() {
                           Failed
                         </button>
                       )}
-                      {p.status !== "overdue" && (
+                      {p.status === "pending" && (
                         <button
                           type="button"
                           className="text-amber-300 hover:underline"

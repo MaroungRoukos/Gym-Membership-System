@@ -77,6 +77,10 @@ export type Member = {
   outstanding_amount: string;
   account_balance: string;
   balance_status: "credit" | "owes" | "settled";
+  /** Open attendance session — present when list/detail includes attendance annotations. */
+  is_checked_in?: boolean;
+  open_checkin_id?: number | null;
+  last_check_in_time?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -302,6 +306,21 @@ export function membersQuery(params: {
   if (params.ordering?.trim()) q.set("ordering", params.ordering.trim());
   const suffix = q.toString();
   return `/api/members/${suffix ? `?${suffix}` : ""}`;
+}
+
+export async function fetchMembersPage(params: {
+  search?: string;
+  phone?: string;
+  status?: "" | MembershipStatus;
+  plan?: "" | MemberPlan;
+  payment_status?: "" | PaymentStatus | "none";
+  expiry_before?: string;
+  expiry_after?: string;
+  limit?: number;
+  offset?: number;
+  ordering?: string;
+}) {
+  return apiFetch<PaginatedResponse<Member>>(membersQuery(params));
 }
 
 export async function fetchDashboard(expiringDays = 30) {

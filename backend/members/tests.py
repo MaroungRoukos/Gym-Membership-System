@@ -150,6 +150,32 @@ class MemberApiTests(BaseAPITestCase):
         self.assertEqual(response.data["count"], 3)
         self.assertEqual(len(response.data["results"]), 2)
 
+    def test_members_list_reflects_open_check_in(self):
+        self.authenticate_admin()
+        member = self.create_member(200)
+        member.refresh_from_db()
+        chk = AttendanceCheckin.objects.create(member=member, source=AttendanceCheckin.Source.DESK)
+
+        response = self.client.get(f"/api/members/?search={member.id_number}&limit=5")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = next(r for r in response.data["results"] if r["id"] == member.id)
+        self.assertTrue(row["is_checked_in"])
+        self.assertEqual(row["open_checkin_id"], chk.id)
+        self.assertIsNotNone(row["last_check_in_time"])
+
+    def test_member_detail_reflects_checked_out(self):
+        self.authenticate_admin()
+        member = self.create_member(201)
+        ck = AttendanceCheckin.objects.create(member=member, source=AttendanceCheckin.Source.DESK)
+        ck.check_out_time = timezone.now()
+        ck.save(update_fields=["check_out_time"])
+
+        response = self.client.get(f"/api/members/{member.id}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["is_checked_in"])
+        self.assertIsNone(response.data["open_checkin_id"])
+        self.assertIsNone(response.data["last_check_in_time"])
+
     def test_members_support_ordering(self):
         self.authenticate_admin()
         today = timezone.localdate()

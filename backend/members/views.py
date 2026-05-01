@@ -65,8 +65,27 @@ def _annotate_member_payment_fields(qs):
     )
 
 
+def _annotate_member_open_attendance(qs):
+    open_ordered = (
+        AttendanceCheckin.objects.filter(
+            member_id=OuterRef("pk"),
+            check_out_time__isnull=True,
+        )
+        .order_by("-check_in_time")
+    )
+    return qs.annotate(
+        open_checkin_pk=Subquery(open_ordered.values("id")[:1]),
+        open_checkin_started=Subquery(open_ordered.values("check_in_time")[:1]),
+    )
+
+
 def _member_for_response(pk, context):
-    inst = _annotate_member_payment_fields(Member.objects.filter(pk=pk)).first()
+    inst = (
+        _annotate_member_open_attendance(
+            _annotate_member_payment_fields(Member.objects.filter(pk=pk))
+        )
+        .first()
+    )
     return MemberSerializer(inst, context=context).data
 
 
@@ -154,6 +173,7 @@ class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
             "updated_at",
         )
         qs = _annotate_member_payment_fields(qs)
+        qs = _annotate_member_open_attendance(qs)
 
         search = (self.request.query_params.get("search") or "").strip()
         membership_status = self.request.query_params.get("status")
@@ -168,6 +188,7 @@ class MemberViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
             qs = qs.filter(
                 Q(first_name__icontains=search)
                 | Q(last_name__icontains=search)
+                | Q(full_name_text__icontains=search)
                 | Q(id_number__icontains=search)
                 | Q(phone__icontains=search)
             )
@@ -614,9 +635,10 @@ class DashboardView(APIView):
             .order_by("end_date")[:50]
         )
         expiring_soon = expiring.count()
-        expiring_data = MemberSerializer(
-            _annotate_member_payment_fields(expiring), many=True
-        ).data
+        expiring_qs = _annotate_member_open_attendance(
+            _annotate_member_payment_fields(expiring)
+        )
+        expiring_data = MemberSerializer(expiring_qs, many=True).data
 
         return Response(
             {

@@ -41,6 +41,9 @@ class MemberSerializer(serializers.ModelSerializer):
     outstanding_amount = serializers.SerializerMethodField(read_only=True)
     account_balance = serializers.SerializerMethodField(read_only=True)
     balance_status = serializers.SerializerMethodField(read_only=True)
+    is_checked_in = serializers.SerializerMethodField(read_only=True)
+    open_checkin_id = serializers.SerializerMethodField(read_only=True)
+    last_check_in_time = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Member
@@ -66,6 +69,9 @@ class MemberSerializer(serializers.ModelSerializer):
             "outstanding_amount",
             "account_balance",
             "balance_status",
+            "is_checked_in",
+            "open_checkin_id",
+            "last_check_in_time",
             "created_at",
             "updated_at",
         )
@@ -117,6 +123,17 @@ class MemberSerializer(serializers.ModelSerializer):
 
     def get_balance_status(self, obj):
         return self._financial_summary(obj)["balance_status"]
+
+    def get_is_checked_in(self, obj):
+        return getattr(obj, "open_checkin_pk", None) is not None
+
+    def get_open_checkin_id(self, obj):
+        return getattr(obj, "open_checkin_pk", None)
+
+    def get_last_check_in_time(self, obj):
+        if getattr(obj, "open_checkin_pk", None):
+            return getattr(obj, "open_checkin_started", None)
+        return None
 
 
 class MemberWriteSerializer(serializers.ModelSerializer):

@@ -18,7 +18,7 @@ function openDatePicker(input: HTMLInputElement | null) {
 }
 
 const inputBaseClass =
-  "date-input-poly min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 [color-scheme:dark]";
+  "date-input-poly min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 [color-scheme:dark] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
 
 type Props = Omit<
   InputHTMLAttributes<HTMLInputElement>,
@@ -30,6 +30,11 @@ type Props = Omit<
   inputClassName?: string;
   /** Screen reader + tooltip (default: "Choose date"). */
   openPickerLabel?: string;
+  /**
+   * If false, only the native `type="date"` control is shown (styled via globals).
+   * Use when duplicate calendar affordances feel redundant next to browser chrome.
+   */
+  showPickerButton?: boolean;
 };
 
 function DateIcon({ className }: { className?: string }) {
@@ -58,33 +63,42 @@ export function DateInputWithCalendarButton({
   onChange,
   inputClassName = "",
   openPickerLabel = "Choose date",
+  showPickerButton = true,
   required,
   autoComplete = "off",
   ...rest
 }: Props) {
   const ref = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex min-w-0 items-stretch gap-2">
+    <div
+      className={
+        showPickerButton
+          ? "flex min-w-0 items-stretch gap-2"
+          : "w-full min-w-0"
+      }
+    >
       <input
         ref={ref}
         id={id}
         type="date"
         required={required}
         autoComplete={autoComplete}
-        className={`${inputBaseClass} ${inputClassName}`.trim()}
+        className={`${inputBaseClass} ${showPickerButton ? "flex-1" : "w-full"} ${inputClassName}`.trim()}
         value={value}
         onChange={onChange}
         {...rest}
       />
-      <button
-        type="button"
-        onClick={() => openDatePicker(ref.current)}
-        className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-[var(--foreground)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-        title={openPickerLabel}
-        aria-label={openPickerLabel}
-      >
-        <DateIcon className="h-5 w-5" />
-      </button>
+      {showPickerButton ? (
+        <button
+          type="button"
+          onClick={() => openDatePicker(ref.current)}
+          className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-[var(--foreground)] hover:border-[var(--accent)] hover:text-[var(--accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          title={openPickerLabel}
+          aria-label={openPickerLabel}
+        >
+          <DateIcon className="h-5 w-5" />
+        </button>
+      ) : null}
     </div>
   );
 }

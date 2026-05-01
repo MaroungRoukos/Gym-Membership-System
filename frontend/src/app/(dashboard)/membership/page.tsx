@@ -11,6 +11,7 @@ import {
   renewMember,
   type Member,
   type MemberPlan,
+  type MembershipStatus,
 } from "@/lib/api";
 
 const PLANS: { value: MemberPlan; label: string }[] = [
@@ -22,6 +23,39 @@ const PLANS: { value: MemberPlan; label: string }[] = [
   { value: "custom", label: "Custom" },
 ];
 
+function formatIsoDate(iso: string) {
+  const [y, m, d] = iso.split("-").map((x) => parseInt(x, 10));
+  if (!y || !m || !d) return iso;
+  try {
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function membershipStatusLabel(status: MembershipStatus) {
+  return status.replace(/_/g, " ");
+}
+
+const statusBadgeClass: Record<MembershipStatus, string> = {
+  active:
+    "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 ring-1 ring-inset ring-emerald-500/20",
+  expired:
+    "border-rose-500/35 bg-rose-500/10 text-rose-200 ring-1 ring-inset ring-rose-500/15",
+  not_active:
+    "border-amber-500/35 bg-amber-500/10 text-amber-100 ring-1 ring-inset ring-amber-500/15",
+};
+
+const fieldClass =
+  "mt-1.5 block w-full min-h-[42px] rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
+const planSelectClass = `${fieldClass} capitalize`;
+const cardClass =
+  "rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6";
+
 export default function MembershipPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [memberId, setMemberId] = useState<number | "">("");
@@ -31,28 +65,32 @@ export default function MembershipPage() {
   );
   const [renewPlan, setRenewPlan] = useState<MemberPlan | "">("");
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [renewLoading, setRenewLoading] = useState(false);
 
-  async function loadMembers() {
-    setLoading(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [assignSuccess, setAssignSuccess] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [renewSuccess, setRenewSuccess] = useState<string | null>(null);
+  const [renewError, setRenewError] = useState<string | null>(null);
+
+  async function loadMembers(opts?: { silent?: boolean }) {
+    const silent = opts?.silent === true;
+    if (!silent) setLoading(true);
     try {
+      setLoadError(null);
       const data = await apiFetch<Member[]>(membersQuery({}));
       setMembers(data);
       setMemberId((prev) => {
-        if (
-          typeof prev === "number" &&
-          data.some((m) => m.id === prev)
-        ) {
+        if (typeof prev === "number" && data.some((m) => m.id === prev)) {
           return prev;
         }
         return data.length ? data[0].id : "";
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load members");
+      setLoadError(e instanceof Error ? e.message : "Failed to load members");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -60,187 +98,368 @@ export default function MembershipPage() {
     loadMembers();
   }, []);
 
+  useEffect(() => {
+    setAssignSuccess(null);
+    setAssignError(null);
+    setRenewSuccess(null);
+    setRenewError(null);
+  }, [memberId]);
+
   const selected = members.find((m) => m.id === memberId) ?? null;
 
   async function onAssign(e: FormEvent) {
     e.preventDefault();
     if (!memberId) return;
-    setError(null);
-    setMessage(null);
-    setBusy(true);
+    setAssignError(null);
+    setAssignSuccess(null);
+    setRenewSuccess(null);
+    setRenewError(null);
+    setAssignLoading(true);
     try {
       await assignMembership(Number(memberId), {
         plan: assignPlan,
         start_date: assignStart,
       });
-      setMessage("Membership assigned (plan and dates updated).");
-      await loadMembers();
+      setAssignSuccess("Membership assigned. Plan and dates were updated.");
+      await loadMembers({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Assign failed");
+      setAssignError(
+        err instanceof Error ? err.message : "Could not assign membership."
+      );
     } finally {
-      setBusy(false);
+      setAssignLoading(false);
     }
   }
 
   async function onRenew(e: FormEvent) {
     e.preventDefault();
     if (!memberId) return;
-    setError(null);
-    setMessage(null);
-    setBusy(true);
+    setRenewError(null);
+    setRenewSuccess(null);
+    setAssignSuccess(null);
+    setAssignError(null);
+    setRenewLoading(true);
     try {
-      await renewMember(
-        Number(memberId),
-        renewPlan || undefined
-      );
-      setMessage("Membership renewed (end date extended).");
-      await loadMembers();
+      await renewMember(Number(memberId), renewPlan || undefined);
+      setRenewSuccess("Membership renewed. End date was extended.");
+      await loadMembers({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Renew failed");
+      setRenewError(
+        err instanceof Error ? err.message : "Could not renew membership."
+      );
     } finally {
-      setBusy(false);
+      setRenewLoading(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Membership</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Assign a plan and start date, or renew an existing membership (extends
-          end date).
-        </p>
-      </div>
+    <div className="space-y-5">
+      <header className="space-y-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Membership</h1>
+          <p className="mt-1 max-w-3xl text-sm text-[var(--muted)]">
+            Set a member&apos;s plan and start date, or renew to extend coverage.
+            Assign replaces the active period from the chosen start date; renew
+            adds time from the current end date or from today if they are
+            expired.
+          </p>
+        </div>
+        {selected && (
+          <div
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)]/80 bg-[var(--surface-soft)]/80 px-3 py-2.5 text-sm"
+            aria-live="polite"
+          >
+            <span className="text-[var(--muted)]">Selected:</span>
+            <span className="font-medium text-[var(--foreground)]">
+              {selected.full_name}
+            </span>
+            <span className="hidden sm:inline text-[var(--border)]">·</span>
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusBadgeClass[selected.membership_status]}`}
+            >
+              {membershipStatusLabel(selected.membership_status)}
+            </span>
+            <span className="text-[var(--muted)]">
+              <span className="text-[var(--foreground)]">{selected.plan}</span>
+              {" · "}
+              ends {formatIsoDate(selected.end_date)}
+            </span>
+          </div>
+        )}
+      </header>
 
-      {error && <Alert type="error">{error}</Alert>}
-      {message && <Alert type="success">{message}</Alert>}
+      {loadError && <Alert type="error">{loadError}</Alert>}
 
       {loading ? (
-        <p className="text-[var(--muted)]">Loading…</p>
+        <p className="text-sm text-[var(--muted)]">Loading members…</p>
       ) : (
         <>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-            <label className="text-xs text-[var(--muted)]">Member</label>
-            <select
-              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
-              value={memberId === "" ? "" : memberId}
-              onChange={(e) =>
-                setMemberId(e.target.value ? Number(e.target.value) : "")
-              }
-            >
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.full_name} ({m.id_number}) — ends {m.end_date}
-                </option>
-              ))}
-            </select>
-            {selected && (
-              <p className="mt-3 text-sm text-[var(--muted)]">
-                Current:{" "}
-                <span className="capitalize text-[var(--foreground)]">
-                  {selected.plan}
-                </span>{" "}
-                · Active/expired:{" "}
-                <span className="capitalize">
-                  {selected.membership_status.replace("_", " ")}
-                </span>{" "}
-                ·{" "}
+          <section className={cardClass} aria-labelledby="member-card-title">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <h2 id="member-card-title" className="sr-only">
+                  Member selection
+                </h2>
+                <label
+                  htmlFor="membership-member-select"
+                  className="text-xs font-medium text-[var(--muted)]"
+                >
+                  Member
+                </label>
+                <select
+                  id="membership-member-select"
+                  className={fieldClass}
+                  value={memberId === "" ? "" : memberId}
+                  onChange={(e) =>
+                    setMemberId(e.target.value ? Number(e.target.value) : "")
+                  }
+                  aria-describedby={
+                    selected ? "member-summary-hint" : undefined
+                  }
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.full_name} ({m.id_number})
+                    </option>
+                  ))}
+                </select>
+                <p id="member-summary-hint" className="mt-2 text-xs text-[var(--muted)]">
+                  Choose who to assign or renew. Details update below.
+                </p>
+              </div>
+              {selected ? (
                 <Link
                   href={`/members/${selected.id}/edit`}
-                  className="text-[var(--accent)] hover:underline"
+                  className="inline-flex h-[42px] shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-transparent px-4 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--muted)] hover:bg-[var(--background)]/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                 >
                   Edit profile
                 </Link>
-              </p>
-            )}
-          </div>
-
-          <form
-            onSubmit={onAssign}
-            className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6"
-          >
-            <h2 className="font-medium">Assign membership</h2>
-            <p className="text-xs text-[var(--muted)]">
-              Sets plan, start date, and end date (computed unless you edit member
-              with a custom end).
-            </p>
-            <div>
-              <label className="text-xs text-[var(--muted)]">Plan</label>
-              <select
-                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 capitalize"
-                value={assignPlan}
-                onChange={(e) => setAssignPlan(e.target.value as MemberPlan)}
-              >
-                {PLANS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              ) : null}
             </div>
-            <div>
-              <label
-                className="text-xs text-[var(--muted)]"
-                htmlFor="assign-start-date"
-              >
-                Start date
-              </label>
-              <div className="mt-1">
-                <DateInputWithCalendarButton
-                  id="assign-start-date"
-                  required
-                  value={assignStart}
-                  onChange={(e) => setAssignStart(e.target.value)}
-                />
+
+            {selected ? (
+              <div className="mt-4 border-t border-[var(--border)]/60 pt-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-[var(--muted)]">
+                  Current membership
+                </p>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Name</dt>
+                    <dd className="mt-0.5 truncate text-sm font-medium text-[var(--foreground)]">
+                      {selected.full_name}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Member ID</dt>
+                    <dd className="mt-0.5 font-mono text-sm text-[var(--foreground)]">
+                      {selected.id_number}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Plan</dt>
+                    <dd className="mt-0.5 text-sm capitalize text-[var(--foreground)]">
+                      {selected.plan}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Status</dt>
+                    <dd className="mt-0.5">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${statusBadgeClass[selected.membership_status]}`}
+                      >
+                        {membershipStatusLabel(selected.membership_status)}
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-4">
+                    <dt className="text-xs text-[var(--muted)]">
+                      Coverage end date
+                    </dt>
+                    <dd className="mt-0.5 text-sm text-[var(--foreground)]">
+                      {formatIsoDate(selected.end_date)}
+                    </dd>
+                  </div>
+                </dl>
               </div>
-            </div>
-            <button
-              type="submit"
-              disabled={busy || !memberId}
-              className="rounded-lg bg-[var(--accent)] px-4 py-2 text-white disabled:opacity-50"
-            >
-              Assign
-            </button>
-          </form>
+            ) : null}
+          </section>
 
-          <form
-            onSubmit={onRenew}
-            className="space-y-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6"
-          >
-            <h2 className="font-medium">Renew membership</h2>
-            <p className="text-xs text-[var(--muted)]">
-              If still active, extends from current end date. If expired, starts
-              from today.
-            </p>
-            <div>
-              <label className="text-xs text-[var(--muted)]">
-                Plan (optional — same as current if empty)
-              </label>
-              <select
-                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 capitalize"
-                value={renewPlan}
-                onChange={(e) =>
-                  setRenewPlan(
-                    e.target.value ? (e.target.value as MemberPlan) : ""
-                  )
-                }
-              >
-                <option value="">Keep current / default</option>
-                {PLANS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="submit"
-              disabled={busy || !memberId}
-              className="rounded-lg border border-[var(--border)] px-4 py-2 hover:bg-[var(--background)] disabled:opacity-50"
+          <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
+            <form
+              onSubmit={onAssign}
+              className={`${cardClass} flex flex-col border-l-4 border-l-[var(--accent)]/70`}
+              aria-labelledby="assign-heading"
             >
-              Renew
-            </button>
-          </form>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+                    New period
+                  </p>
+                  <h2
+                    id="assign-heading"
+                    className="mt-1 text-lg font-semibold text-[var(--foreground)]"
+                  >
+                    Assign membership
+                  </h2>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+                    Sets the member&apos;s plan and start date. The server
+                    calculates the end date from the plan (monthly, quarterly,
+                    etc.)—you normally do not set the end date here.
+                  </p>
+                </div>
+              </div>
+
+              {assignError && (
+                <div className="mb-4" role="alert">
+                  <Alert type="error">{assignError}</Alert>
+                </div>
+              )}
+              {assignSuccess && (
+                <div className="mb-4" role="status">
+                  <Alert type="success">{assignSuccess}</Alert>
+                </div>
+              )}
+
+              <div className="flex flex-1 flex-col gap-4">
+                <div>
+                  <label
+                    htmlFor="assign-plan"
+                    className="text-xs font-medium text-[var(--muted)]"
+                  >
+                    Plan
+                  </label>
+                  <select
+                    id="assign-plan"
+                    className={planSelectClass}
+                    value={assignPlan}
+                    onChange={(e) => setAssignPlan(e.target.value as MemberPlan)}
+                  >
+                    {PLANS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="text-xs font-medium text-[var(--muted)]"
+                    htmlFor="assign-start-date"
+                  >
+                    Start date
+                  </label>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Use the calendar control in the field. The end date is
+                    derived from this start date and the plan you select above.
+                  </p>
+                  <div className="mt-1.5">
+                    <DateInputWithCalendarButton
+                      id="assign-start-date"
+                      required
+                      value={assignStart}
+                      onChange={(e) => setAssignStart(e.target.value)}
+                      showPickerButton={false}
+                      inputClassName="min-h-[42px]"
+                    />
+                  </div>
+                </div>
+                <div className="mt-auto pt-1">
+                  <button
+                    type="submit"
+                    disabled={assignLoading || !memberId}
+                    aria-busy={assignLoading}
+                    className="w-full rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  >
+                    {assignLoading ? "Assigning…" : "Assign membership"}
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <form
+              onSubmit={onRenew}
+              className={`${cardClass} flex flex-col border-l-4 border-l-[var(--muted)]/50`}
+              aria-labelledby="renew-heading"
+            >
+              <div className="mb-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Extend coverage
+                </p>
+                <h2
+                  id="renew-heading"
+                  className="mt-1 text-lg font-semibold text-[var(--foreground)]"
+                >
+                  Renew membership
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+                  <strong className="font-medium text-[var(--foreground)]/90">
+                    Different from assign:
+                  </strong>{" "}
+                  renew keeps the existing membership timeline and adds another
+                  term. If the member is still active, the extension runs from
+                  their current end date. If expired, coverage starts from
+                  today.
+                </p>
+              </div>
+
+              {renewError && (
+                <div className="mb-4" role="alert">
+                  <Alert type="error">{renewError}</Alert>
+                </div>
+              )}
+              {renewSuccess && (
+                <div className="mb-4" role="status">
+                  <Alert type="success">{renewSuccess}</Alert>
+                </div>
+              )}
+
+              <div className="flex flex-1 flex-col gap-4">
+                <div>
+                  <label
+                    htmlFor="renew-plan"
+                    className="text-xs font-medium text-[var(--muted)]"
+                  >
+                    Plan for renewal
+                  </label>
+                  <select
+                    id="renew-plan"
+                    className={fieldClass}
+                    value={renewPlan}
+                    onChange={(e) =>
+                      setRenewPlan(
+                        e.target.value ? (e.target.value as MemberPlan) : ""
+                      )
+                    }
+                    aria-describedby="renew-plan-hint"
+                  >
+                    <option value="">
+                      Keep current plan (recommended)
+                    </option>
+                    {PLANS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        Switch to {o.label} for this renewal
+                      </option>
+                    ))}
+                  </select>
+                  <p id="renew-plan-hint" className="mt-1.5 text-xs text-[var(--muted)]">
+                    Leave on the default to renew with their existing plan. Pick
+                    another plan only if you are changing what they are paying
+                    for going forward.
+                  </p>
+                </div>
+                <div className="mt-auto pt-1">
+                  <button
+                    type="submit"
+                    disabled={renewLoading || !memberId}
+                    aria-busy={renewLoading}
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)]/40 px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--muted)] hover:bg-[var(--background)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  >
+                    {renewLoading ? "Renewing…" : "Renew membership"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </>
       )}
     </div>

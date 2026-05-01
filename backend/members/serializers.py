@@ -5,6 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import (
     AttendanceCheckin,
+    default_checkin_sources,
     GymSetting,
     Member,
     MemberCharge,
@@ -617,6 +618,61 @@ class GymSettingSerializer(serializers.ModelSerializer):
             "logo_url",
             "currency",
             "admin_display_name",
+            "timezone",
+            "date_format",
+            "registration_fee",
+            "default_payment_due_days",
+            "invoice_prefix",
+            "allow_credit_balance",
+            "allow_outstanding_balance",
+            "tax_enabled",
+            "tax_rate",
+            "default_membership_duration_days",
+            "grace_period_days",
+            "block_checkin_when_expired",
+            "allow_renewal_with_outstanding_balance",
+            "require_payment_before_renewal",
+            "require_checkout",
+            "auto_checkout_hours",
+            "allow_duplicate_checkin_same_day",
+            "checkin_sources",
             "updated_at",
         )
         read_only_fields = ("updated_at",)
+
+    def validate_registration_fee(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Registration fee cannot be negative.")
+        return value
+
+    def validate_default_payment_due_days(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError(
+                "Default payment due days cannot be negative."
+            )
+        return value
+
+    def validate_tax_rate(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Tax rate cannot be negative.")
+        return value
+
+    def validate_currency(self, value):
+        if value is None or str(value).strip() == "":
+            raise serializers.ValidationError("Currency is required.")
+        return str(value).strip().upper()
+
+    def validate_invoice_prefix(self, value):
+        if value is None or str(value).strip() == "":
+            raise serializers.ValidationError("Invoice prefix is required.")
+        return str(value).strip()
+
+    def validate_checkin_sources(self, value):
+        if value is None:
+            return default_checkin_sources()
+        if not isinstance(value, list):
+            raise serializers.ValidationError("checkin_sources must be a list of strings.")
+        clean = [str(s).strip() for s in value if str(s).strip()]
+        if not clean:
+            return default_checkin_sources()
+        return clean

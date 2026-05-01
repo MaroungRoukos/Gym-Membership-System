@@ -13,7 +13,7 @@ const links = [
   { href: "/reports", label: "Reports" },
   { href: "/search", label: "Search & filter" },
   { href: "/expiring", label: "Expiring" },
-  { href: "/settings", label: "Settings" },
+  { href: "/settings", label: "Configuration" },
 ];
 
 function isActivePath(pathname: string, href: string) {

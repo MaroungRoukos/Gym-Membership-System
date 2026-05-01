@@ -163,6 +163,24 @@ export type GymSettings = {
   logo_url: string;
   currency: string;
   admin_display_name: string;
+  timezone: string;
+  date_format: string;
+  registration_fee: string;
+  default_payment_due_days: number;
+  invoice_prefix: string;
+  allow_credit_balance: boolean;
+  allow_outstanding_balance: boolean;
+  tax_enabled: boolean;
+  tax_rate: string;
+  default_membership_duration_days: number;
+  grace_period_days: number;
+  block_checkin_when_expired: boolean;
+  allow_renewal_with_outstanding_balance: boolean;
+  require_payment_before_renewal: boolean;
+  require_checkout: boolean;
+  auto_checkout_hours: number;
+  allow_duplicate_checkin_same_day: boolean;
+  checkin_sources: string[];
   updated_at: string;
 };
 

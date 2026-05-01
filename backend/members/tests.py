@@ -10,6 +10,7 @@ from rest_framework.test import APITestCase
 from .finance import member_financial_summary
 from .models import (
     AttendanceCheckin,
+    GymSetting,
     Member,
     MemberCharge,
     Payment,
@@ -654,3 +655,61 @@ class DashboardApiTests(BaseAPITestCase):
         self.assertEqual(response.data["active_memberships"], 1)
         self.assertEqual(response.data["total_revenue"], "100.00")
         self.assertEqual(response.data["unpaid_balances"], "50.00")
+
+
+class GymSettingApiTests(BaseAPITestCase):
+    def test_settings_get_requires_auth(self):
+        response = self.client.get("/api/settings/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_settings_get_patch_round_trip(self):
+        self.authenticate_admin()
+        get_r = self.client.get("/api/settings/")
+        self.assertEqual(get_r.status_code, status.HTTP_200_OK)
+        self.assertIn("gym_name", get_r.data)
+        self.assertEqual(get_r.data["invoice_prefix"], "INV")
+        self.assertEqual(get_r.data["timezone"], "UTC")
+        self.assertTrue(get_r.data["block_checkin_when_expired"])
+        self.assertFalse(get_r.data["allow_renewal_with_outstanding_balance"])
+        self.assertEqual(
+            get_r.data["checkin_sources"],
+            ["Desk", "Staff", "QR", "Kiosk"],
+        )
+
+        patch_r = self.client.patch(
+            "/api/settings/",
+            {
+                "gym_name": "Iron Arena",
+                "registration_fee": "25.50",
+                "invoice_prefix": "GYM",
+                "timezone": "America/New_York",
+                "checkin_sources": ["Desk", "QR"],
+            },
+            format="json",
+        )
+        self.assertEqual(patch_r.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_r.data["gym_name"], "Iron Arena")
+        self.assertEqual(patch_r.data["registration_fee"], "25.50")
+        self.assertEqual(patch_r.data["invoice_prefix"], "GYM")
+
+        refreshed = GymSetting.objects.get(pk=1)
+        self.assertEqual(refreshed.registration_fee, Decimal("25.50"))
+
+    def test_settings_negative_fee_rejected(self):
+        self.authenticate_admin()
+        r = self.client.patch(
+            "/api/settings/",
+            {"registration_fee": "-1"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_settings_empty_invoice_prefix_rejected(self):
+        self.authenticate_admin()
+        r = self.client.patch("/api/settings/", {"invoice_prefix": "  "}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_settings_empty_currency_rejected(self):
+        self.authenticate_admin()
+        r = self.client.patch("/api/settings/", {"currency": ""}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST)

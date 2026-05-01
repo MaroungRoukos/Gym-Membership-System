@@ -290,11 +290,46 @@ class AttendanceCheckin(models.Model):
         ]
 
 
+def default_checkin_sources():
+    return ["Desk", "Staff", "QR", "Kiosk"]
+
+
 class GymSetting(models.Model):
     gym_name = models.CharField(max_length=120, default="Gym Admin")
     logo_url = models.URLField(blank=True)
     currency = models.CharField(max_length=8, default="USD")
     admin_display_name = models.CharField(max_length=100, blank=True, default="")
+
+    timezone = models.CharField(
+        max_length=64,
+        default="UTC",
+        help_text="IANA timezone name (e.g. America/New_York).",
+    )
+    date_format = models.CharField(
+        max_length=32,
+        default="%Y-%m-%d",
+        help_text='strftime-compatible pattern used for display (e.g. "%Y-%m-%d").',
+    )
+
+    registration_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    default_payment_due_days = models.PositiveIntegerField(default=0)
+    invoice_prefix = models.CharField(max_length=32, default="INV")
+    allow_credit_balance = models.BooleanField(default=True)
+    allow_outstanding_balance = models.BooleanField(default=True)
+    tax_enabled = models.BooleanField(default=False)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    default_membership_duration_days = models.PositiveIntegerField(default=30)
+    grace_period_days = models.PositiveIntegerField(default=0)
+    block_checkin_when_expired = models.BooleanField(default=True)
+    allow_renewal_with_outstanding_balance = models.BooleanField(default=False)
+    require_payment_before_renewal = models.BooleanField(default=False)
+
+    require_checkout = models.BooleanField(default=True)
+    auto_checkout_hours = models.PositiveIntegerField(default=12)
+    allow_duplicate_checkin_same_day = models.BooleanField(default=False)
+    checkin_sources = models.JSONField(default=default_checkin_sources)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):

@@ -182,6 +182,48 @@ class PaymentApiTests(BaseAPITestCase):
         amounts = [Decimal(item["amount"]) for item in response.data["results"]]
         self.assertEqual(amounts, sorted(amounts))
 
+    def test_create_payment_generates_invoice_number_when_missing(self):
+        self.authenticate_admin()
+        member = self.create_member(1)
+
+        response = self.client.post(
+            "/api/payments/",
+            {
+                "member": member.id,
+                "amount": "49.99",
+                "status": "pending",
+                "method": "cash",
+                "description": "Generated invoice test",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertRegex(
+            response.data["invoice_number"],
+            r"^INV-\d{8}-\d{4}$",
+        )
+
+    def test_create_payment_keeps_explicit_invoice_number_when_provided(self):
+        self.authenticate_admin()
+        member = self.create_member(2)
+        explicit_invoice = "INV-20260501-9999"
+
+        response = self.client.post(
+            "/api/payments/",
+            {
+                "member": member.id,
+                "amount": "99.00",
+                "status": "pending",
+                "method": "card",
+                "invoice_number": explicit_invoice,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["invoice_number"], explicit_invoice)
+
 
 class CheckinApiTests(BaseAPITestCase):
     def test_checkins_list_supports_pagination(self):

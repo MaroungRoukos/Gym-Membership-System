@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.db import IntegrityError, transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -245,7 +246,25 @@ class PaymentWriteSerializer(serializers.ModelSerializer):
         paid_at = None
         if status == Payment.Status.PAID:
             paid_at = timezone.now()
-        return Payment.objects.create(paid_at=paid_at, **validated_data)
+        invoice_number = (validated_data.pop("invoice_number", "") or "").strip()
+        max_retries = 5
+        for _ in range(max_retries):
+            if not invoice_number:
+                invoice_number = Payment.generate_invoice_number()
+            try:
+                with transaction.atomic():
+                    return Payment.objects.create(
+                        paid_at=paid_at,
+                        invoice_number=invoice_number,
+                        **validated_data,
+                    )
+            except IntegrityError:
+                # Collision can happen under concurrent writes; regenerate and retry.
+                invoice_number = ""
+                continue
+        raise serializers.ValidationError(
+            {"invoice_number": "Could not generate a unique invoice number. Please retry."}
+        )
 
 
 class PaymentUpdateSerializer(serializers.ModelSerializer):

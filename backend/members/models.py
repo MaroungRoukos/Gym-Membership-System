@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class RecordedMemberPaymentStatus(models.TextChoices):
@@ -124,9 +125,33 @@ class Payment(models.Model):
             models.Index(fields=["member", "status"]),
             models.Index(fields=["member", "due_date"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["invoice_number"],
+                condition=~models.Q(invoice_number=""),
+                name="uniq_payment_invoice_number_non_empty",
+            )
+        ]
 
     def __str__(self):
         return f"{self.member_id} {self.amount} {self.status}"
+
+    @classmethod
+    def generate_invoice_number(cls, day=None) -> str:
+        use_day = day or timezone.localdate()
+        prefix = f"INV-{use_day:%Y%m%d}-"
+        latest = (
+            cls.objects.filter(invoice_number__startswith=prefix)
+            .order_by("-invoice_number")
+            .values_list("invoice_number", flat=True)
+            .first()
+        )
+        sequence = 0
+        if latest and latest.startswith(prefix):
+            suffix = latest[len(prefix) :]
+            if suffix.isdigit():
+                sequence = int(suffix)
+        return f"{prefix}{sequence + 1:04d}"
 
 
 class MemberNote(models.Model):

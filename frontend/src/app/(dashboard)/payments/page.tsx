@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert } from "@/components/Alert";
+import { DateInputWithCalendarButton } from "@/components/DateInputWithCalendarButton";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHero } from "@/components/PageHero";
 import { PaginationControls, parseOffset, parsePageSize } from "@/components/PaginationControls";
@@ -21,6 +22,27 @@ import {
 } from "@/lib/api";
 
 type SortOption = "-created_at" | "created_at" | "-amount" | "amount" | "due_date";
+
+function isoToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatInvoiceDatePart(isoDate: string) {
+  return isoDate.replace(/-/g, "");
+}
+
+function computeNextInvoiceNumber(existing: string[], isoDate: string) {
+  const prefix = `INV-${formatInvoiceDatePart(isoDate)}-`;
+  const maxForDate = existing.reduce((max, invoice) => {
+    if (!invoice?.startsWith(prefix)) return max;
+    const suffix = invoice.slice(prefix.length);
+    if (!/^\d{4}$/.test(suffix)) return max;
+    const n = Number(suffix);
+    return Number.isFinite(n) ? Math.max(max, n) : max;
+  }, 0);
+  const next = String(maxForDate + 1).padStart(4, "0");
+  return `${prefix}${next}`;
+}
 
 function parseFilterMember(raw: string | null): number | "" {
   if (!raw) return "";
@@ -65,9 +87,13 @@ export default function PaymentsPage() {
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<PaymentStatus>("pending");
   const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [useTodayPaymentDate, setUseTodayPaymentDate] = useState(true);
+  const [paymentDate, setPaymentDate] = useState(() => isoToday());
   const [dueDate, setDueDate] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [description, setDescription] = useState("");
+  const [lastCreatedInvoice, setLastCreatedInvoice] = useState<string | null>(null);
+  const [memberRecentPayments, setMemberRecentPayments] = useState<Payment[]>([]);
+  const [recentPaymentsLoading, setRecentPaymentsLoading] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
   const [memberSearchOpen, setMemberSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -93,6 +119,23 @@ export default function PaymentsPage() {
       }
       return mData.length ? mData[0].id : "";
     });
+  }, []);
+
+  const loadMemberRecentPayments = useCallback(async (targetMemberId: number) => {
+    setRecentPaymentsLoading(true);
+    try {
+      const data = await fetchPaymentsPage({
+        member: targetMemberId,
+        limit: 5,
+        offset: 0,
+        ordering: "-created_at",
+      });
+      setMemberRecentPayments(data.results);
+    } catch {
+      setMemberRecentPayments([]);
+    } finally {
+      setRecentPaymentsLoading(false);
+    }
   }, []);
 
   const loadPayments = useCallback(async () => {
@@ -150,6 +193,15 @@ export default function PaymentsPage() {
   }, [loadMembers]);
 
   useEffect(() => {
+    if (!memberId) {
+      setMemberRecentPayments([]);
+      setLastCreatedInvoice(null);
+      return;
+    }
+    void loadMemberRecentPayments(Number(memberId));
+  }, [loadMemberRecentPayments, memberId]);
+
+  useEffect(() => {
     if (totalCount > 0 && offset >= totalCount) {
       setOffset(Math.max(0, Math.floor((totalCount - 1) / limit) * limit));
     }
@@ -157,27 +209,33 @@ export default function PaymentsPage() {
 
   async function onRecord(e: FormEvent) {
     e.preventDefault();
-    if (!memberId || !amount) return;
+    if (!memberId || !amount || !paymentDate) return;
     setSubmitting(true);
     setError(null);
     setSuccess(null);
     try {
-      await createPayment({
+      const created = await createPayment({
         member: Number(memberId),
         amount,
         status,
         method,
         due_date: dueDate || null,
-        invoice_number: invoiceNumber || undefined,
         description,
+        // TODO: Backend currently keeps `paid_at` read-only and derives timestamps from server-side create/status flows.
+        // Keep using created_at behavior until API accepts an explicit payment date field.
       });
       setAmount("");
       setDescription("");
       setStatus("pending");
       setMethod("cash");
       setDueDate("");
-      setInvoiceNumber("");
-      setSuccess("Payment recorded.");
+      setLastCreatedInvoice(created.invoice_number || null);
+      setSuccess(
+        `Payment recorded. Invoice # ${created.invoice_number || "Generated"}`
+      );
+      if (memberId) {
+        await loadMemberRecentPayments(Number(memberId));
+      }
       await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to record");
@@ -197,6 +255,14 @@ export default function PaymentsPage() {
 
   const selectedFilterMember =
     members.find((m) => m.id === filterMember) ?? null;
+  const selectedRecordMember = members.find((m) => m.id === memberId) ?? null;
+  const generatedInvoiceNumber = useMemo(() => {
+    const dateSource = paymentDate || isoToday();
+    return computeNextInvoiceNumber(
+      memberRecentPayments.map((p) => p.invoice_number),
+      dateSource
+    );
+  }, [memberRecentPayments, paymentDate]);
 
   const filteredMemberOptions = useMemo(() => {
     const term = memberSearch.trim().toLowerCase();
@@ -277,6 +343,85 @@ export default function PaymentsPage() {
               ))}
             </select>
           </div>
+          {selectedRecordMember && (
+            <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+              <div className="text-xs text-[var(--muted)]">
+                <span className="font-medium text-[var(--foreground)]">
+                  {selectedRecordMember.full_name}
+                </span>{" "}
+                · {selectedRecordMember.id_number} · {selectedRecordMember.phone}
+              </div>
+              <div>
+                <p className="text-xs text-[var(--muted)]">Invoice preview</p>
+                <code className="mt-1 inline-flex rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs text-[var(--foreground)]">
+                  {generatedInvoiceNumber}
+                </code>
+                {lastCreatedInvoice && (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Invoice # (saved):{" "}
+                    <span className="font-mono text-[var(--foreground)]">
+                      {lastCreatedInvoice}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs text-[var(--muted)]">Payment date</label>
+              <label className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={useTodayPaymentDate}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setUseTodayPaymentDate(checked);
+                    if (checked) setPaymentDate(isoToday());
+                  }}
+                />
+                Use today&apos;s date
+              </label>
+            </div>
+            <DateInputWithCalendarButton
+              required
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              disabled={useTodayPaymentDate}
+              showPickerButton={false}
+            />
+            <p className="text-xs text-[var(--muted)]">
+              Payment date is when the payment is recorded/received.
+            </p>
+          </div>
+          <div className="space-y-2 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+            <p className="text-xs text-[var(--muted)]">Past invoices</p>
+            {recentPaymentsLoading ? (
+              <p className="text-xs text-[var(--muted)]">Loading past invoices…</p>
+            ) : memberRecentPayments.length === 0 ? (
+              <p className="text-xs text-[var(--muted)]">
+                No past invoices for this member.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {memberRecentPayments.slice(0, 5).map((p) => (
+                  <div
+                    key={p.id}
+                    className="grid grid-cols-5 gap-2 rounded-md border border-white/10 bg-[var(--background)]/30 px-2 py-1.5 text-[11px]"
+                  >
+                    <span className="col-span-2 truncate font-mono text-[var(--foreground)]">
+                      {p.invoice_number || "—"}
+                    </span>
+                    <span className="tabular-nums">${p.amount}</span>
+                    <span className="capitalize text-[var(--muted)]">{p.status}</span>
+                    <span className="text-[var(--muted)]">
+                      {new Date(p.created_at).toLocaleDateString()} · due {p.due_date ?? "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div>
             <label className="text-xs text-[var(--muted)]">Amount</label>
             <input
@@ -317,20 +462,14 @@ export default function PaymentsPage() {
           </div>
           <div>
             <label className="text-xs text-[var(--muted)]">Due date</label>
-            <input
-              type="date"
-              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
+            <DateInputWithCalendarButton
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
+              showPickerButton={false}
             />
-          </div>
-          <div>
-            <label className="text-xs text-[var(--muted)]">Invoice #</label>
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2"
-              value={invoiceNumber}
-              onChange={(e) => setInvoiceNumber(e.target.value)}
-            />
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Due date is when payment is/was expected (optional).
+            </p>
           </div>
           <div>
             <label className="text-xs text-[var(--muted)]">Description</label>

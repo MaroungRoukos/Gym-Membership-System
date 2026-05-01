@@ -23,6 +23,14 @@ def _as_decimal(value) -> Decimal:
     return Decimal(str(value))
 
 
+def _api_detail_value(data: dict, key: str):
+    """DRF may wrap serializer ValidationError values in single-element lists."""
+    v = data.get(key)
+    if isinstance(v, list) and v:
+        v = v[0]
+    return v
+
+
 class BaseAPITestCase(APITestCase):
     def setUp(self):
         self.user_model = get_user_model()
@@ -427,6 +435,146 @@ class RenewalFinancialValidationTests(BaseAPITestCase):
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
 
 
+class AttendanceSessionApiTests(BaseAPITestCase):
+    def test_active_member_can_check_in(self):
+        self.authenticate_admin()
+        member = self.create_member(100)
+        member.refresh_from_db()
+        response = self.client.post(
+            "/api/checkins/quick/",
+            {"id_number": member.id_number},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["membership_status"], "active")
+        self.assertTrue(response.data["is_in_gym"])
+        self.assertIsNone(response.data["check_out_time"])
+
+    def test_expired_member_cannot_check_in(self):
+        self.authenticate_admin()
+        member = self.create_member(101)
+        member.end_date = timezone.localdate() - timedelta(days=2)
+        member.save(update_fields=["end_date", "updated_at"])
+
+        response = self.client.post(
+            "/api/checkins/quick/",
+            {"member": member.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            str(_api_detail_value(response.data, "error")),
+            "Cannot check in. Membership is not active.",
+        )
+
+    def test_inactive_member_cannot_check_in(self):
+        self.authenticate_admin()
+        member = self.create_member(102)
+        member.member_payment_status = RecordedMemberPaymentStatus.PENDING
+        member.save(update_fields=["member_payment_status", "updated_at"])
+
+        response = self.client.post(
+            "/api/checkins/quick/",
+            {"member": member.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            str(_api_detail_value(response.data, "error")),
+            "Cannot check in. Membership is not active.",
+        )
+
+    def test_cannot_double_check_in_without_checkout(self):
+        self.authenticate_admin()
+        member = self.create_member(103)
+        first = self.client.post("/api/checkins/quick/", {"member": member.id}, format="json")
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        second = self.client.post("/api/checkins/quick/", {"member": member.id}, format="json")
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            str(_api_detail_value(second.data, "error")), "Member is already checked in."
+        )
+        self.assertEqual(
+            int(str(_api_detail_value(second.data, "open_checkin_id"))), first.data["id"]
+        )
+
+    def test_checked_in_member_can_check_out(self):
+        self.authenticate_admin()
+        member = self.create_member(104)
+        first = self.client.post("/api/checkins/quick/", {"member": member.id}, format="json")
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+
+        response = self.client.post(
+            "/api/checkins/quick-checkout/",
+            {"member": member.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(response.data["check_out_time"])
+        self.assertFalse(response.data["is_in_gym"])
+
+    def test_member_not_checked_in_cannot_check_out(self):
+        self.authenticate_admin()
+        member = self.create_member(105)
+
+        response = self.client.post(
+            "/api/checkins/quick-checkout/",
+            {"member": member.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            str(_api_detail_value(response.data, "error")),
+            "This member is not currently checked in.",
+        )
+
+    def test_checkout_via_detail_sets_check_out_time(self):
+        self.authenticate_admin()
+        member = self.create_member(106)
+        created = self.client.post("/api/checkins/quick/", {"member": member.id}, format="json")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        vid = created.data["id"]
+
+        detail = self.client.post(f"/api/checkins/{vid}/checkout/", {}, format="json")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(detail.data["check_out_time"])
+
+    def test_recent_visits_list_includes_membership_and_check_out(self):
+        self.authenticate_admin()
+        member = self.create_member(107)
+        first = self.client.post("/api/checkins/quick/", {"member": member.id}, format="json")
+        vid = first.data["id"]
+        self.client.post(f"/api/checkins/{vid}/checkout/", {}, format="json")
+
+        response = self.client.get("/api/checkins/?ordering=-check_in_time&limit=5")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = (
+            response.data if isinstance(response.data, list) else response.data["results"]
+        )
+        row = next(r for r in results if r["id"] == vid)
+        self.assertEqual(row["membership_status"], "active")
+        self.assertIsNotNone(row["check_out_time"])
+
+    def test_visit_scope_filters_in_gym(self):
+        self.authenticate_admin()
+        member_open = self.create_member(108)
+        member_closed = self.create_member(109)
+        self.client.post("/api/checkins/quick/", {"member": member_open.id}, format="json")
+        v2 = self.client.post("/api/checkins/quick/", {"member": member_closed.id}, format="json")
+        self.client.post(f"/api/checkins/{v2.data['id']}/checkout/", {}, format="json")
+
+        response = self.client.get("/api/checkins/?visit_scope=in_gym&limit=20")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = (
+            response.data["results"]
+            if "results" in response.data
+            else response.data
+        )
+        open_ids = {r["member"] for r in ids}
+        self.assertIn(member_open.id, open_ids)
+        self.assertNotIn(member_closed.id, open_ids)
+
+
 class CheckinApiTests(BaseAPITestCase):
     def test_checkins_list_supports_pagination(self):
         self.authenticate_admin()
@@ -449,9 +597,9 @@ class CheckinApiTests(BaseAPITestCase):
                 member=member, source=AttendanceCheckin.Source.STAFF
             )
 
-        response = self.client.get("/api/checkins/?ordering=-checked_in_at&page=1&page_size=3")
+        response = self.client.get("/api/checkins/?ordering=-check_in_time&page=1&page_size=3")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        checkin_times = [item["checked_in_at"] for item in response.data["results"]]
+        checkin_times = [item["check_in_time"] for item in response.data["results"]]
         self.assertEqual(checkin_times, sorted(checkin_times, reverse=True))
 
 

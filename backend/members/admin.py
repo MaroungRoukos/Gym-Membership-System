@@ -78,7 +78,7 @@ class MembershipHistoryAdmin(admin.ModelAdmin):
 
 @admin.register(AttendanceCheckin)
 class AttendanceCheckinAdmin(admin.ModelAdmin):
-    list_display = ("member", "source", "checked_in_at")
+    list_display = ("member", "source", "check_in_time", "check_out_time", "recorded_by")
     list_filter = ("source",)
     search_fields = ("member__id_number", "member__first_name", "member__last_name")
 

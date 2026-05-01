@@ -1,7 +1,7 @@
 from dateutil.relativedelta import relativedelta
 from django.utils import timezone
 
-from .models import Member
+from .models import Member, RecordedMemberPaymentStatus
 
 
 def end_date_for_plan(start_date, plan: str):
@@ -32,3 +32,17 @@ def renew_membership(member: Member, plan: str | None = None) -> Member:
     member.plan = plan
     member.save()
     return member
+
+
+def attendance_membership_status(member: Member) -> str:
+    """Mirrors MemberSerializer membership_status: active | expired | not_active."""
+    today = timezone.localdate()
+    if member.member_payment_status != RecordedMemberPaymentStatus.PAID:
+        return "not_active"
+    if member.end_date >= today:
+        return "active"
+    return "expired"
+
+
+def member_may_check_in_for_attendance(member: Member) -> bool:
+    return attendance_membership_status(member) == "active"

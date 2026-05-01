@@ -139,8 +139,13 @@ export type Checkin = {
   member: number;
   member_name: string;
   member_id_number: string;
+  membership_status: MembershipStatus;
   source: "desk" | "staff" | "self";
-  checked_in_at: string;
+  check_in_time: string;
+  check_out_time: string | null;
+  duration_seconds: number | null;
+  is_in_gym: boolean;
+  recorded_by_username: string | null;
 };
 
 export type ReportsData = {
@@ -208,8 +213,15 @@ export async function apiFetch<T>(
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const err = (await res.json()) as { detail?: unknown };
-      if (typeof err.detail === "string") detail = err.detail;
+      const err = (await res.json()) as { detail?: unknown; error?: unknown };
+      const firstStr = (v: unknown): string | null => {
+        if (typeof v === "string") return v;
+        if (Array.isArray(v) && v.length > 0) return String(v[0]);
+        return null;
+      };
+      const errMsg = firstStr(err.error);
+      if (errMsg) detail = errMsg;
+      else if (typeof err.detail === "string") detail = err.detail;
       else if (Array.isArray(err.detail))
         detail = err.detail.map((d) => JSON.stringify(d)).join(", ");
     } catch {
@@ -449,21 +461,27 @@ export async function fetchMembershipHistory(memberId: number) {
   return apiFetch<MembershipHistory[]>(`/api/membership-history/?member=${memberId}`);
 }
 
-export async function fetchCheckins(params?: { member?: number }) {
+export async function fetchCheckins(params?: {
+  member?: number;
+  visit_scope?: "" | "in_gym" | "today";
+}) {
   const q = new URLSearchParams();
   if (params?.member) q.set("member", String(params.member));
+  if (params?.visit_scope) q.set("visit_scope", params.visit_scope);
   const suffix = q.toString();
   return apiFetch<Checkin[]>(`/api/checkins/${suffix ? `?${suffix}` : ""}`);
 }
 
 export async function fetchCheckinsPage(params?: {
   member?: number;
+  visit_scope?: "" | "in_gym" | "today";
   limit?: number;
   offset?: number;
   ordering?: string;
 }) {
   const q = new URLSearchParams();
   if (params?.member) q.set("member", String(params.member));
+  if (params?.visit_scope) q.set("visit_scope", params.visit_scope);
   if (typeof params?.limit === "number") q.set("limit", String(params.limit));
   if (typeof params?.offset === "number") q.set("offset", String(params.offset));
   if (params?.ordering?.trim()) q.set("ordering", params.ordering.trim());
@@ -472,11 +490,23 @@ export async function fetchCheckinsPage(params?: {
 }
 
 export async function quickCheckin(body: {
+  member?: number;
   id_number?: string;
   search?: string;
   source?: "desk" | "staff" | "self";
 }) {
   return apiFetch<Checkin>("/api/checkins/quick/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function quickCheckout(body: {
+  member?: number;
+  id_number?: string;
+  search?: string;
+}) {
+  return apiFetch<Checkin>("/api/checkins/quick-checkout/", {
     method: "POST",
     body: JSON.stringify(body),
   });

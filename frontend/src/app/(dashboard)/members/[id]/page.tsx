@@ -602,7 +602,16 @@ export default function MemberDetailsPage() {
               ) : (
                 checkins.slice(0, 12).map((c) => (
                   <div key={c.id} className="rounded-md border border-[var(--border)]/70 p-2">
-                    <p className="text-sm">{new Date(c.checked_in_at).toLocaleString()}</p>
+                    <p className="text-sm">
+                      In: {new Date(c.check_in_time).toLocaleString()}
+                    </p>
+                    {c.check_out_time ? (
+                      <p className="text-xs text-[var(--muted)]">
+                        Out: {new Date(c.check_out_time).toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-[var(--muted)]">Open visit</p>
+                    )}
                     <p className="text-xs capitalize text-[var(--muted)]">{c.source}</p>
                   </div>
                 ))

@@ -260,6 +260,8 @@ class MembershipHistory(models.Model):
 
 
 class AttendanceCheckin(models.Model):
+    """A gym visit/session: check-in time required; check-out completes the session."""
+
     class Source(models.TextChoices):
         DESK = "desk", "Front desk"
         STAFF = "staff", "Staff"
@@ -271,12 +273,20 @@ class AttendanceCheckin(models.Model):
         related_name="checkins",
     )
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.DESK)
-    checked_in_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    check_in_time = models.DateTimeField(auto_now_add=True, db_index=True)
+    check_out_time = models.DateTimeField(null=True, blank=True, db_index=True)
+    recorded_by = models.ForeignKey(
+        "auth.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="recorded_attendance_visits",
+    )
 
     class Meta:
-        ordering = ["-checked_in_at"]
+        ordering = ["-check_in_time"]
         indexes = [
-            models.Index(fields=["member", "checked_in_at"]),
+            models.Index(fields=["member", "check_in_time"]),
         ]
 
 

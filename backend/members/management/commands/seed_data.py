@@ -135,22 +135,23 @@ class Command(BaseCommand):
                     checkin_date = today - timedelta(days=day_offset)
                     exists = AttendanceCheckin.objects.filter(
                         member=member,
-                        checked_in_at__date=checkin_date,
+                        check_in_time__date=checkin_date,
                     ).exists()
                     if exists:
                         skipped["checkins"] += 1
                         continue
-                    checkin = AttendanceCheckin.objects.create(
+                    AttendanceCheckin.objects.create(
                         member=member,
-                        source=random.choice([AttendanceCheckin.Source.DESK, AttendanceCheckin.Source.STAFF]),
+                        source=random.choice(
+                            [AttendanceCheckin.Source.DESK, AttendanceCheckin.Source.STAFF]
+                        ),
+                        check_in_time=timezone.make_aware(
+                            datetime.combine(
+                                checkin_date,
+                                time(hour=random.randint(6, 21), minute=random.randint(0, 59)),
+                            )
+                        ),
                     )
-                    checkin.checked_in_at = timezone.make_aware(
-                        datetime.combine(
-                            checkin_date,
-                            time(hour=random.randint(6, 21), minute=random.randint(0, 59)),
-                        )
-                    )
-                    checkin.save(update_fields=["checked_in_at"])
                     created["checkins"] += 1
 
             if random.random() < 0.5:

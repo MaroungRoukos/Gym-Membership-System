@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.db import transaction
 from django.db.models import CharField, Count, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Concat
 from django.utils import timezone
@@ -37,6 +38,7 @@ from .serializers import (
     PaymentUpdateSerializer,
     PaymentWriteSerializer,
     QuickCheckinSerializer,
+    QuickCheckoutSerializer,
     RenewMembershipSerializer,
 )
 
@@ -450,16 +452,23 @@ class MembershipHistoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AttendanceCheckinViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
     queryset = (
-        AttendanceCheckin.objects.select_related("member")
+        AttendanceCheckin.objects.select_related("member", "recorded_by")
         .only(
             "id",
             "member_id",
             "source",
-            "checked_in_at",
+            "check_in_time",
+            "check_out_time",
+            "recorded_by_id",
             "member__id",
             "member__id_number",
             "member__first_name",
             "member__last_name",
+            "member__phone",
+            "member__plan",
+            "member__member_payment_status",
+            "member__end_date",
+            "recorded_by__username",
         )
         .annotate(
             member_name=Concat(
@@ -474,25 +483,68 @@ class AttendanceCheckinViewSet(OptionalPaginationMixin, viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     http_method_names = ["get", "post", "head", "options"]
 
+    def create(self, request, *args, **kwargs):
+        """Create a visit/check-in (same validation as quick check-in)."""
+        ser = QuickCheckinSerializer(data=request.data, context=self.get_serializer_context())
+        ser.is_valid(raise_exception=True)
+        visit = ser.save()
+        out = AttendanceCheckinSerializer(visit, context=self.get_serializer_context())
+        return Response(out.data, status=status.HTTP_201_CREATED)
+
     def get_queryset(self):
         qs = super().get_queryset()
         member_id = self.request.query_params.get("member")
         if member_id:
             qs = qs.filter(member_id=member_id)
+        today = timezone.localdate()
+        if self.action == "list":
+            scope = (self.request.query_params.get("visit_scope") or "all").strip().lower()
+            if scope == "in_gym":
+                qs = qs.filter(check_out_time__isnull=True)
+            elif scope == "today":
+                qs = qs.filter(check_in_time__date=today)
         return _apply_ordering(
             qs,
             self.request.query_params.get("ordering"),
-            {"checked_in_at"},
-            ("-checked_in_at",),
+            {"check_in_time", "check_out_time"},
+            ("-check_in_time",),
         )
 
     @action(detail=False, methods=["post"], url_path="quick")
     def quick(self, request):
-        ser = QuickCheckinSerializer(data=request.data)
+        ser = QuickCheckinSerializer(data=request.data, context=self.get_serializer_context())
         ser.is_valid(raise_exception=True)
         checkin = ser.save()
         out = AttendanceCheckinSerializer(checkin, context=self.get_serializer_context())
         return Response(out.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="quick-checkout")
+    def quick_checkout(self, request):
+        ser = QuickCheckoutSerializer(data=request.data, context=self.get_serializer_context())
+        ser.is_valid(raise_exception=True)
+        visit = ser.save()
+        out = AttendanceCheckinSerializer(visit, context=self.get_serializer_context())
+        return Response(out.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="checkout")
+    def checkout(self, request, pk=None):
+        ctx = self.get_serializer_context()
+        pk_val = self.get_object().pk
+        with transaction.atomic():
+            locked = (
+                AttendanceCheckin.objects.select_related("member", "recorded_by")
+                .select_for_update()
+                .get(pk=pk_val)
+            )
+            if locked.check_out_time is not None:
+                return Response(
+                    {"error": "This session is already checked out."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            locked.check_out_time = timezone.now()
+            locked.save(update_fields=["check_out_time"])
+            out = AttendanceCheckinSerializer(locked, context=ctx)
+            return Response(out.data, status=status.HTTP_200_OK)
 
 
 class DashboardView(APIView):
@@ -619,7 +671,7 @@ class ReportsView(APIView):
                 {
                     "label": day.strftime("%a"),
                     "checkins": AttendanceCheckin.objects.filter(
-                        checked_in_at__date=day
+                        check_in_time__date=day
                     ).count(),
                 }
             )

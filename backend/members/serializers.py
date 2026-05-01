@@ -1,5 +1,5 @@
-from django.utils import timezone
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -14,7 +14,11 @@ from .models import (
     RecordedMemberPaymentStatus,
 )
 from .finance import member_financial_summary
-from .utils import end_date_for_plan
+from .utils import (
+    attendance_membership_status,
+    end_date_for_plan,
+    member_may_check_in_for_attendance,
+)
 from .validators import normalize_lebanon_phone
 
 
@@ -413,6 +417,10 @@ class MembershipHistorySerializer(serializers.ModelSerializer):
 class AttendanceCheckinSerializer(serializers.ModelSerializer):
     member_name = serializers.SerializerMethodField(read_only=True)
     member_id_number = serializers.CharField(source="member.id_number", read_only=True)
+    membership_status = serializers.SerializerMethodField(read_only=True)
+    duration_seconds = serializers.SerializerMethodField(read_only=True)
+    is_in_gym = serializers.SerializerMethodField(read_only=True)
+    recorded_by_username = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = AttendanceCheckin
@@ -421,18 +429,78 @@ class AttendanceCheckinSerializer(serializers.ModelSerializer):
             "member",
             "member_name",
             "member_id_number",
+            "membership_status",
             "source",
-            "checked_in_at",
+            "check_in_time",
+            "check_out_time",
+            "duration_seconds",
+            "is_in_gym",
+            "recorded_by_username",
         )
-        read_only_fields = ("checked_in_at",)
+        read_only_fields = (
+            "check_in_time",
+            "check_out_time",
+            "membership_status",
+            "duration_seconds",
+            "is_in_gym",
+            "recorded_by_username",
+        )
 
     def get_member_name(self, obj):
         if hasattr(obj, "member_name"):
             return obj.member_name
         return obj.member.display_name()
 
+    def get_membership_status(self, obj):
+        return attendance_membership_status(obj.member)
+
+    def get_duration_seconds(self, obj):
+        if obj.check_out_time:
+            delta = obj.check_out_time - obj.check_in_time
+            return int(delta.total_seconds())
+        return None
+
+    def get_is_in_gym(self, obj):
+        return obj.check_out_time is None
+
+    def get_recorded_by_username(self, obj):
+        u = getattr(obj, "recorded_by", None)
+        if not u:
+            return None
+        return u.get_username()
+
+
+def _quick_resolve_member(attrs):
+    explicit = attrs.get("member")
+    if explicit:
+        attrs["member"] = explicit
+        return attrs
+
+    id_number = (attrs.get("id_number") or "").strip()
+    search = (attrs.get("search") or "").strip()
+    if not id_number and not search:
+        raise serializers.ValidationError(
+            {"error": "Provide member, id_number, or search."}
+        )
+    member = None
+    if id_number:
+        member = Member.objects.filter(id_number__iexact=id_number).first()
+    if not member and search:
+        member = (
+            Member.objects.filter(first_name__icontains=search)
+            | Member.objects.filter(last_name__icontains=search)
+            | Member.objects.filter(id_number__icontains=search)
+        ).first()
+    if not member:
+        raise serializers.ValidationError({"error": "Member not found."})
+    attrs["member"] = member
+    return attrs
+
 
 class QuickCheckinSerializer(serializers.Serializer):
+    member = serializers.PrimaryKeyRelatedField(
+        queryset=Member.objects.all(), required=False, allow_null=False
+    )
     id_number = serializers.CharField(required=False, allow_blank=True)
     search = serializers.CharField(required=False, allow_blank=True)
     source = serializers.ChoiceField(
@@ -442,30 +510,86 @@ class QuickCheckinSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
-        id_number = (attrs.get("id_number") or "").strip()
-        search = (attrs.get("search") or "").strip()
-        if not id_number and not search:
+        _quick_resolve_member(attrs)
+        member = attrs["member"]
+        if not member_may_check_in_for_attendance(member):
             raise serializers.ValidationError(
-                {"detail": "Provide id_number or search to check in a member."}
+                {"error": "Cannot check in. Membership is not active."}
             )
-        member = None
-        if id_number:
-            member = Member.objects.filter(id_number__iexact=id_number).first()
-        if not member and search:
-            member = (
-                Member.objects.filter(first_name__icontains=search)
-                | Member.objects.filter(last_name__icontains=search)
-                | Member.objects.filter(id_number__icontains=search)
-            ).first()
-        if not member:
-            raise serializers.ValidationError({"detail": "Member not found."})
-        attrs["member"] = member
+        existing = AttendanceCheckin.objects.filter(
+            member=member, check_out_time__isnull=True
+        ).first()
+        if existing:
+            raise serializers.ValidationError(
+                {
+                    "error": "Member is already checked in.",
+                    "open_checkin_id": existing.pk,
+                }
+            )
         return attrs
 
     def save(self, **kwargs):
         member = self.validated_data["member"]
         source = self.validated_data.get("source", AttendanceCheckin.Source.DESK)
-        return AttendanceCheckin.objects.create(member=member, source=source)
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        uid = getattr(user, "pk", None) if getattr(user, "is_authenticated", False) else None
+        with transaction.atomic():
+            locked = Member.objects.select_for_update().get(pk=member.pk)
+            if not member_may_check_in_for_attendance(locked):
+                raise serializers.ValidationError(
+                    {"error": "Cannot check in. Membership is not active."}
+                )
+            open_row = AttendanceCheckin.objects.filter(
+                member=locked, check_out_time__isnull=True
+            ).first()
+            if open_row:
+                raise serializers.ValidationError(
+                    {
+                        "error": "Member is already checked in.",
+                        "open_checkin_id": open_row.pk,
+                    }
+                )
+            return AttendanceCheckin.objects.create(
+                member=locked,
+                source=source,
+                recorded_by_id=uid,
+            )
+
+
+class QuickCheckoutSerializer(serializers.Serializer):
+    member = serializers.PrimaryKeyRelatedField(
+        queryset=Member.objects.all(), required=False, allow_null=False
+    )
+    id_number = serializers.CharField(required=False, allow_blank=True)
+    search = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        _quick_resolve_member(attrs)
+        member = attrs["member"]
+        session = (
+            AttendanceCheckin.objects.filter(member=member, check_out_time__isnull=True)
+            .order_by("-check_in_time")
+            .first()
+        )
+        if not session:
+            raise serializers.ValidationError(
+                {"error": "This member is not currently checked in."}
+            )
+        attrs["session"] = session
+        return attrs
+
+    def save(self, **kwargs):
+        session = self.validated_data["session"]
+        with transaction.atomic():
+            locked = AttendanceCheckin.objects.select_for_update().get(pk=session.pk)
+            if locked.check_out_time is not None:
+                raise serializers.ValidationError(
+                    {"error": "This member is not currently checked in."}
+                )
+            locked.check_out_time = timezone.now()
+            locked.save(update_fields=["check_out_time"])
+            return locked
 
 
 class GymSettingSerializer(serializers.ModelSerializer):

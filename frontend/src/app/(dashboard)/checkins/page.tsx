@@ -144,22 +144,29 @@ function VisitTimestamp({ iso }: { iso: string | null }) {
   );
 }
 
-/** Search by name / ID / phone, or browse recent members when `query` is empty. */
-async function fetchMemberSuggestionList(query: string): Promise<Member[]> {
-  const q = query.trim();
-  if (!q) {
-    const page = await fetchMembersPage({
-      limit: 15,
-      ordering: "-updated_at",
-    });
-    return page.results;
-  }
+const BROWSE_PAGE_SIZE = 60;
+
+type BrowseSort = "alpha" | "recent";
+
+async function fetchMembersSearchFiltered(query: string): Promise<{ results: Member[]; total: number }> {
   const page = await fetchMembersPage({
-    search: q,
-    limit: 22,
+    search: query.trim(),
+    limit: 28,
     ordering: "first_name",
   });
-  return page.results;
+  return { results: page.results, total: page.count };
+}
+
+async function fetchMembersBrowseChunk(
+  sort: BrowseSort,
+  offset: number,
+): Promise<{ results: Member[]; total: number }> {
+  const page = await fetchMembersPage({
+    limit: BROWSE_PAGE_SIZE,
+    offset,
+    ordering: sort === "recent" ? "-updated_at" : "first_name",
+  });
+  return { results: page.results, total: page.count };
 }
 
 export default function CheckinsPage() {
@@ -169,6 +176,8 @@ export default function CheckinsPage() {
   const searchGeneration = useRef(0);
   /** DOM timer handle (Node types overload `setTimeout` differently from `window`). */
   const blurCloseTimer = useRef<number | null>(null);
+  const memberInputRef = useRef<HTMLInputElement>(null);
+  const deskFormRef = useRef<HTMLFormElement>(null);
 
   const [visits, setVisits] = useState<Checkin[]>([]);
   /** Unified combobox: name, member ID, or phone (same as API `search`). */
@@ -192,6 +201,9 @@ export default function CheckinsPage() {
   const [searchResults, setSearchResults] = useState<Member[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [browseSort, setBrowseSort] = useState<BrowseSort>("alpha");
+  const [browseTotal, setBrowseTotal] = useState(0);
+  const [browseLoadingMore, setBrowseLoadingMore] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
@@ -226,13 +238,22 @@ export default function CheckinsPage() {
     const t = window.setTimeout(() => {
       void (async () => {
         try {
-          const list = await fetchMemberSuggestionList(trimmed ? memberQuery : "");
-          if (mine !== searchGeneration.current) return;
-          setSearchResults(list);
+          if (trimmed) {
+            const { results, total } = await fetchMembersSearchFiltered(memberQuery);
+            if (mine !== searchGeneration.current) return;
+            setSearchResults(results);
+            setBrowseTotal(total);
+          } else {
+            const { results, total } = await fetchMembersBrowseChunk(browseSort, 0);
+            if (mine !== searchGeneration.current) return;
+            setSearchResults(results);
+            setBrowseTotal(total);
+          }
         } catch (e) {
           if (mine !== searchGeneration.current) return;
-          setSearchError(e instanceof Error ? e.message : "Search failed");
+          setSearchError(e instanceof Error ? e.message : "Failed to load members");
           setSearchResults([]);
+          setBrowseTotal(0);
         } finally {
           if (mine === searchGeneration.current) setSearchLoading(false);
         }
@@ -240,7 +261,69 @@ export default function CheckinsPage() {
     }, delay);
 
     return () => window.clearTimeout(t);
-  }, [pickerOpen, memberQuery]);
+  }, [pickerOpen, memberQuery, browseSort]);
+
+  async function appendBrowsePage() {
+    if (memberQuery.trim() !== "" || browseLoadingMore || !pickerOpen) return;
+    const loaded = searchResults.length;
+    if (browseTotal > 0 && loaded >= browseTotal) return;
+
+    setBrowseLoadingMore(true);
+    try {
+      const { results } = await fetchMembersBrowseChunk(browseSort, loaded);
+      if (results.length === 0) return;
+      setSearchResults((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const next = [...prev];
+        for (const m of results) {
+          if (!seen.has(m.id)) {
+            seen.add(m.id);
+            next.push(m);
+          }
+        }
+        return next;
+      });
+    } catch {
+      /* keep list */
+    } finally {
+      setBrowseLoadingMore(false);
+    }
+  }
+
+  function clearPickerBlurTimer() {
+    if (blurCloseTimer.current) {
+      window.clearTimeout(blurCloseTimer.current);
+      blurCloseTimer.current = null;
+    }
+  }
+
+  function openBrowseRoster(kind: BrowseSort) {
+    clearPickerBlurTimer();
+    setDeskHint(null);
+    setBrowseSort(kind);
+    setMemberQuery("");
+    setPickerOpen(true);
+    queueMicrotask(() => memberInputRef.current?.focus());
+  }
+
+  function togglePickerFromChevron() {
+    clearPickerBlurTimer();
+    if (pickerOpen) {
+      setPickerOpen(false);
+    } else {
+      setPickerOpen(true);
+      queueMicrotask(() => memberInputRef.current?.focus());
+    }
+  }
+
+  function scrollDeskPanelIntoView() {
+    queueMicrotask(() =>
+      deskFormRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      }),
+    );
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -285,20 +368,15 @@ export default function CheckinsPage() {
     }
   }, [limit, offset, totalCount]);
 
-  const cancelBlurClose = useCallback(() => {
-    if (blurCloseTimer.current) {
-      window.clearTimeout(blurCloseTimer.current);
-      blurCloseTimer.current = null;
-    }
-  }, []);
+  const cancelBlurClose = clearPickerBlurTimer;
 
   const scheduleClosePicker = useCallback(() => {
-    cancelBlurClose();
+    clearPickerBlurTimer();
     blurCloseTimer.current = window.setTimeout(() => setPickerOpen(false), 200);
-  }, [cancelBlurClose]);
+  }, []);
 
   function openPicker() {
-    cancelBlurClose();
+    clearPickerBlurTimer();
     setPickerOpen(true);
   }
 
@@ -316,6 +394,23 @@ export default function CheckinsPage() {
     } catch {
       setSelectedMember(row);
     }
+    scrollDeskPanelIntoView();
+  }
+
+  /** Use a recent-visit row to load the member at the desk (check-in / checkout). */
+  async function selectMemberFromVisit(memberId: number) {
+    cancelBlurClose();
+    setDeskHint(null);
+    setMessage(null);
+    setPickerOpen(false);
+    try {
+      const fresh = await fetchMember(memberId);
+      setSelectedMember(fresh);
+      setError(null);
+    } catch {
+      setDeskHint("Could not load that member. Use Browse / search above, then try again.");
+    }
+    scrollDeskPanelIntoView();
   }
 
   async function refreshAfterAttendance(memberId: number) {
@@ -450,7 +545,7 @@ export default function CheckinsPage() {
       <PageHero
         eyebrow="Attendance"
         title="Front-desk attendance console"
-        description="Open the member dropdown to browse recently updated profiles or type any name, ID, or phone to filter — then check in or out."
+        description="Use Browse A–Z or Browse recent to pick from the roster without typing, or search by name, ID, or phone — then check in or out."
         imageSrc="/images/gym-checkins.jpg"
       />
 
@@ -459,20 +554,45 @@ export default function CheckinsPage() {
       {message && <Alert type="success">{message}</Alert>}
 
       <form
+        ref={deskFormRef}
         onSubmit={deskFormSubmit}
         onKeyDown={onDeskAreaKeyDown}
-        className="space-y-5 rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)]/30 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] backdrop-blur"
+        className="space-y-5 rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)]/30 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] backdrop-blur scroll-mt-20"
       >
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
           <div className="relative min-w-0">
-            <label className="text-xs font-medium text-[var(--muted)]">
-              Member
-              <span className="font-normal normal-case text-[var(--muted)]/85"> · dropdown — type to search by name, ID, or phone</span>
-            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="member-combobox-input" className="text-xs font-medium text-[var(--muted)]">
+                Member roster
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => openBrowseRoster("alpha")}
+                  className="rounded-lg border border-white/14 bg-white/[0.04] px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-cyan-100/95 transition hover:border-cyan-500/35 hover:bg-cyan-500/10"
+                >
+                  Browse A–Z
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => openBrowseRoster("recent")}
+                  className="rounded-lg border border-white/14 bg-white/[0.04] px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-slate-200 transition hover:border-white/25 hover:bg-white/[0.07]"
+                >
+                  Recent
+                </button>
+              </div>
+            </div>
+            <p className="mt-1 text-[0.7rem] text-[var(--muted)]">
+              Open the list with the arrows or Browse — or filter the list by typing a name, ID, or phone.
+            </p>
             <div className="relative mt-1.5">
               <input
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/55 py-2.5 pl-3.5 pr-10 text-sm text-[var(--foreground)] outline-none ring-cyan-500/30 placeholder:text-[var(--muted)] focus-visible:ring-2"
-                placeholder="Search or browse recent members below…"
+                ref={memberInputRef}
+                id="member-combobox-input"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)]/55 py-2.5 pl-3.5 pr-11 text-sm text-[var(--foreground)] outline-none ring-cyan-500/30 placeholder:text-[var(--muted)] focus-visible:ring-2"
+                placeholder="Type to narrow the roster, or browse using the buttons above…"
                 value={memberQuery}
                 onFocus={openPicker}
                 onBlur={scheduleClosePicker}
@@ -481,20 +601,26 @@ export default function CheckinsPage() {
                   setMemberQuery(e.target.value);
                 }}
                 role="combobox"
-                aria-label="Find member — search by name ID or phone"
+                aria-label="Find member — browse roster or search by name ID or phone"
                 aria-expanded={pickerOpen}
                 aria-autocomplete="list"
                 aria-controls="member-picker-listbox"
                 autoComplete="off"
               />
-              <span
-                className={`pointer-events-none absolute right-3 top-1/2 inline-block -translate-y-1/2 text-[var(--muted)] transition-transform ${pickerOpen ? "rotate-180" : ""}`}
-                aria-hidden
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={pickerOpen ? "Close member list" : "Open member roster"}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  togglePickerFromChevron();
+                }}
+                className={`absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center rounded-md p-1 text-[var(--muted)] transition hover:bg-white/10 hover:text-[var(--foreground)] ${pickerOpen ? "rotate-180" : ""}`}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M7 10l5 5 5-5H7z" />
                 </svg>
-              </span>
+              </button>
             </div>
 
             {showSuggestionPanel() ? (
@@ -505,13 +631,41 @@ export default function CheckinsPage() {
                 role="listbox"
               >
                 {browseMode && !searchLoading ? (
-                  <div className="border-b border-white/[0.06] px-4 py-2.5">
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-cyan-200/85">
-                      Recent members
+                  <div className="border-b border-white/[0.06] px-3 py-2.5">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setBrowseSort("alpha")}
+                        className={`flex-1 rounded-lg px-3 py-2 text-center text-[0.72rem] font-semibold transition ${
+                          browseSort === "alpha"
+                            ? "bg-cyan-500/20 text-cyan-50 ring-1 ring-cyan-400/40"
+                            : "bg-white/[0.04] text-[var(--muted)] hover:bg-white/[0.08]"
+                        }`}
+                      >
+                        A–Z roster
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setBrowseSort("recent")}
+                        className={`flex-1 rounded-lg px-3 py-2 text-center text-[0.72rem] font-semibold transition ${
+                          browseSort === "recent"
+                            ? "bg-cyan-500/20 text-cyan-50 ring-1 ring-cyan-400/40"
+                            : "bg-white/[0.04] text-[var(--muted)] hover:bg-white/[0.08]"
+                        }`}
+                      >
+                        Recently updated
+                      </button>
+                    </div>
+                    <p className="mt-2 px-1 text-[0.68rem] leading-relaxed text-[var(--muted)]">
+                      Tap a member to select. Use &ldquo;Load more&rdquo; for the full directory.
                     </p>
-                    <p className="mt-1 text-[0.72rem] leading-relaxed text-[var(--muted)]">
-                      Tap a row to select, or type to filter by name, member ID, or phone number.
-                    </p>
+                  </div>
+                ) : null}
+                {!browseMode && !searchLoading ? (
+                  <div className="border-b border-white/[0.06] px-4 py-2 text-[0.68rem] text-[var(--muted)]">
+                    Filtered by search — clear the field to browse the full roster again.
                   </div>
                 ) : null}
 
@@ -524,7 +678,7 @@ export default function CheckinsPage() {
                 ) : searchResults.length === 0 ? (
                   <div className="px-4 py-3 text-sm text-[var(--muted)]">No members found.</div>
                 ) : (
-                  <ul className="max-h-[min(20rem,calc(100vh-220px))] divide-y divide-white/[0.06] overflow-y-auto">
+                  <ul className="max-h-[min(22rem,calc(100vh-220px))] divide-y divide-white/[0.06] overflow-y-auto">
                     {searchResults.map((row) => {
                       const attendanceIn = row.is_checked_in === true;
                       const isSelectedPick = selectedMember?.id === row.id;
@@ -569,6 +723,21 @@ export default function CheckinsPage() {
                     })}
                   </ul>
                 )}
+                {browseMode && !searchLoading && !searchError && browseTotal > searchResults.length ? (
+                  <div className="border-t border-white/[0.06] bg-white/[0.02] p-2">
+                    <button
+                      type="button"
+                      disabled={browseLoadingMore}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => void appendBrowsePage()}
+                      className="w-full rounded-xl border border-white/12 py-2.5 text-center text-[0.8rem] font-medium text-cyan-100/95 transition hover:border-cyan-500/35 hover:bg-cyan-500/10 disabled:cursor-wait disabled:opacity-50"
+                    >
+                      {browseLoadingMore
+                        ? "Loading more…"
+                        : `Load more (${searchResults.length} of ${browseTotal})`}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -595,7 +764,8 @@ export default function CheckinsPage() {
 
         {!selectionHasQuery && !selectedMember ? (
           <p className="text-[0.72rem] leading-relaxed text-[var(--muted)]">
-            Focus the Member field for a dropdown of recent profiles, or type to search. Your selection alone drives check-in/out — typed text doesn&apos;t act by itself until you confirm a row.
+            Use <span className="text-[var(--foreground)]/90">Browse A–Z</span> or{" "}
+            <span className="text-[var(--foreground)]/90">Recent</span> to open the roster without typing, or focus the field and type to filter. Check-in/out uses only the member you select.
           </p>
         ) : (
           <p className="text-[0.72rem] leading-relaxed text-[var(--muted)]">
@@ -746,7 +916,11 @@ export default function CheckinsPage() {
       {loading ? (
         <p className="text-sm text-[var(--muted)]">Loading visits…</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)]/20">
+        <div className="space-y-2">
+          <p className="text-[0.75rem] text-[var(--muted)]">
+            <span className="text-[var(--foreground)]">Tip:</span> click any row to load that member in the desk panel above for checkout or another check-in.
+          </p>
+          <div className="overflow-x-auto rounded-2xl border border-[var(--border)]/80 bg-[var(--surface)]/20">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b border-[var(--border)]/70 bg-[var(--background)]/40 text-[0.65rem] uppercase tracking-[0.14em] text-[var(--muted)]">
               <tr>
@@ -794,8 +968,27 @@ export default function CheckinsPage() {
                       : v.is_in_gym
                         ? liveElapsedSeconds(v.check_in_time)
                         : null;
+                  const selectedFromTable = selectedMember?.id === v.member;
                   return (
-                    <tr key={v.id} className="hover:bg-[var(--background)]/35">
+                    <tr
+                      key={v.id}
+                      tabIndex={0}
+                      role="button"
+                      title="Load this member at the desk"
+                      aria-label={`Load ${v.member_name} at desk for check-in or check-out`}
+                      onClick={() => void selectMemberFromVisit(v.member)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          void selectMemberFromVisit(v.member);
+                        }
+                      }}
+                      className={`outline-none ring-cyan-500/40 transition-colors focus-visible:bg-[var(--background)]/40 focus-visible:ring-2 ${
+                        selectedFromTable
+                          ? "cursor-pointer bg-cyan-500/[0.12] ring-1 ring-inset ring-cyan-400/30 hover:bg-cyan-500/[0.16]"
+                          : "cursor-pointer hover:bg-[var(--background)]/45"
+                      }`}
+                    >
                       <td className="px-4 py-2.5 text-[var(--foreground)]">
                         <VisitTimestamp iso={v.check_in_time} />
                       </td>
@@ -838,6 +1031,7 @@ export default function CheckinsPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
       <PaginationControls
